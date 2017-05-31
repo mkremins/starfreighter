@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Starfreighter</title>
+  <style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html {
+    background: #222;
+    font-family: Georgia;
+    color: #eee;
+  }
+  body {
+    padding: 2rem;
+  }
+  .app {
+    margin: 0 auto;
+    width: 640px;
+  }
+  /* card */
+  .card {
+    background: #555;
+    border: 1px solid #eee;
+    border-radius: 1em;
+    font-size: 18px;
+    height: 8em;
+    margin-bottom: 1.5rem;
+    padding: 1em;
+  }
+  /* choices */
+  .choices {
+    display: flex;
+    margin-bottom: 1.5rem;
+  }
+  .choice {
+    background: #555;
+    border: 1px solid #eee;
+    border-radius: 1em;
+    cursor: pointer;
+    font-size: 32px;
+    margin-left: 5%;
+    padding-top: 5px;
+    text-align: center;
+    width: 42.5%;
+  }
+  /* stats */
+  .stats {
+    margin-bottom: 1.5rem;
+  }
+  .stat {
+    display: flex;
+  }
+  .stat:not(:last-child){
+    margin-bottom: 5px;
+  }
+  .stat-label {
+    font-size: 24px;
+    width: 5%;
+  }
+  .stat-bar {
+    margin-top: 5px;
+    height: 20px;
+  }
+  .stat.cash { color: green; }
+  .stat.ship { color: orange; }
+  .stat.crew { color: purple; }
+  .stat.cash .stat-bar { background: green; }
+  .stat.ship .stat-bar { background: orange; }
+  .stat.crew .stat-bar { background: purple; }
+  /* lists */
+  .empty {
+    color: #aaa;
+    font-style: italic;
+  }
+  h2 {
+    margin-bottom: 5px;
+  }
+  /* crew list */
+  .crew-list {
+    margin-bottom: 1.5rem;
+  }
+  /* cargo list */
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="target/app.js"></script>
+</body>
+</html>
