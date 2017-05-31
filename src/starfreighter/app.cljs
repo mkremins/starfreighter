@@ -4,16 +4,9 @@
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
-            [starfreighter.gen :as gen]
-            [starfreighter.rand :as rand]))
+            [starfreighter.gen :as gen]))
 
-(defn draw-next-card [state]
-  (let [deck     (filter #((:prereq %) state) (if (:docked? state) cards/port-deck cards/starbound-deck))
-        weights  (zipmap deck (map #((:weight %) state) deck))
-        metacard (rand/weighted-choice weights)]
-    ((:gen metacard) state)))
-
-(defonce app-state
+(defn restart-game [& _]
   (let [state {:stats {:cash 50 :ship 50 :crew 50}
                :crew [(gen/gen-crew-member) (gen/gen-crew-member)]
                :cargo []
@@ -21,28 +14,43 @@
                :max-cargo 4
                :docked? true
                :location "Starport Virgil, Despard’s Gate"}]
-    (atom (assoc state :card (draw-next-card state)))))
+    (assoc state :card (cards/draw-next-card state))))
+
+(defonce app-state
+  (atom (restart-game)))
 
 (defn handle-choice [decision state]
   (let [update-fn (get-in state [:card decision])
         state'    (update-fn state)]
-    (assoc state' :card (draw-next-card state'))))
+    (assoc state' :card (cards/draw-next-card state'))))
 
 (defcomponent card-view [data owner]
   (render [_]
     (dom/div {:class "card"}
       (dom/span {:class "speaker"} (:speaker data))
-      " " (:text data))))
+      " " (:text data)
+      (when (= (:type data) :game-over)
+        (dom/p {:class "game-over"} "[Game Over]")))))
 
 (defcomponent choice-buttons [data owner]
   (render [_]
     (dom/div {:class "choices"}
-      (dom/div {:class "choice no"
-                :on-click #(om/transact! data (partial handle-choice :no))}
-        "👎")
-      (dom/div {:class "choice yes"
-                :on-click #(om/transact! data (partial handle-choice :yes))}
-        "👍"))))
+      (case (:type (:card data))
+        :yes-no
+          [(dom/div {:class "choice no"
+                     :on-click #(om/transact! data (partial handle-choice :no))}
+             "👎")
+           (dom/div {:class "choice yes"
+                     :on-click #(om/transact! data (partial handle-choice :yes))}
+             "👍")]
+        :info
+          (dom/div {:class "choice ok"
+                    :on-click #(om/transact! data (partial handle-choice :ok))}
+            "👌")
+        :game-over
+          (dom/div {:class "choice restart"
+                    :on-click #(om/transact! data restart-game)}
+            (if (:deadly? (:card data)) "☠️" "🔁"))))))
 
 (defcomponent stat-bars [data owner]
   (render [_]

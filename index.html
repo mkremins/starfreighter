@@ -45,6 +45,14 @@
   .card .speaker:after {
     content: ":";
   }
+  .card .speaker:empty:after {
+    content: "";
+  }
+  .card .game-over {
+    font-weight: bold;
+    margin-top: 1em;
+    text-align: center;
+  }
   /* choices */
   .choices {
     display: flex;
@@ -57,16 +65,29 @@
     font-size: 32px;
     padding-top: 5px;
     text-align: center;
-    width: 50%;
-  }
-  .choice.yes {
-    background: darkgreen;
-    border-bottom-right-radius: 9px;
   }
   .choice.no {
     background: brown;
     border-bottom-left-radius: 9px;
     border-right-width: 0;
+    width: 50%;
+  }
+  .choice.yes {
+    background: darkgreen;
+    border-bottom-right-radius: 9px;
+    width: 50%;
+  }
+  .choice.ok, .choice.restart {
+    background: #777;
+    border-bottom-left-radius: 9px;
+    border-bottom-right-radius: 9px;
+    width: 100%;
+  }
+  .choice.ok {
+    background: steelblue;
+  }
+  .choice.restart {
+    background: peru;
   }
   /* stats */
   .stats {
