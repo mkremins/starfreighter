@@ -42,18 +42,12 @@
 (defcomponent stat-bars [data owner]
   (render [_]
     (dom/div {:class "stats"}
-      (dom/div {:class "stat cash"}
-        (dom/div {:class "stat-label"} "💰")
-        (dom/div {:class "stat-bar"
-                  :style {:width (str (* 95 (/ (:cash data) 100)) "%")}}))
-      (dom/div {:class "stat ship"}
-        (dom/div {:class "stat-label"} "🚀")
-        (dom/div {:class "stat-bar"
-                  :style {:width (str (* 95 (/ (:ship data) 100)) "%")}}))
-      (dom/div {:class "stat crew"}
-        (dom/div {:class "stat-label"} "😐")
-        (dom/div {:class "stat-bar"
-                  :style {:width (str (* 95 (/ (:crew data) 100)) "%")}})))))
+      (for [[stat-name icon] [[:cash "💰"] [:ship "🚀"] [:crew "😐"]]]
+        (dom/div {:class (str "stat " (name stat-name))}
+          (dom/div {:class "stat-label"} icon)
+          (dom/div {:class "stat-bar"}
+            (dom/div {:class "stat-bar-fill"
+                      :style {:width (str (get data stat-name) "%")}})))))))
 
 (defcomponent crew-member [data owner]
   (render [_]

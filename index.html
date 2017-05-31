@@ -62,15 +62,22 @@
     width: 5%;
   }
   .stat-bar {
-    margin-top: 5px;
+    background: #333;
     height: 20px;
+    margin-top: 5px;
+    position: relative;
+    width: 95%;
+  }
+  .stat-bar-fill {
+    height: 20px;
+    position: absolute;
   }
   .stat.cash { color: green; }
   .stat.ship { color: orange; }
   .stat.crew { color: purple; }
-  .stat.cash .stat-bar { background: green; }
-  .stat.ship .stat-bar { background: orange; }
-  .stat.crew .stat-bar { background: purple; }
+  .stat.cash .stat-bar-fill { background: green; }
+  .stat.ship .stat-bar-fill { background: orange; }
+  .stat.crew .stat-bar-fill { background: purple; }
   /* lists */
   .empty {
     color: #aaa;
