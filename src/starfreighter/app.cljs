@@ -4,18 +4,21 @@
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
+            [starfreighter.gen :as gen]
             [starfreighter.rand :as rand]))
 
 (defn draw-next-card [state]
   (let [deck     (filter #((:prereq %) state) (if (:docked? state) cards/port-deck cards/starbound-deck))
         weights  (zipmap deck (map #((:weight %) state) deck))
         metacard (rand/weighted-choice weights)]
-    ((:gen metacard))))
+    ((:gen metacard) state)))
 
 (defonce app-state
   (let [state {:stats {:cash 50 :ship 50 :crew 50}
-               :crew [{:name "Kellen Choi" :traits #{:mechanic}}]
+               :crew [(gen/gen-crew-member) (gen/gen-crew-member)]
                :cargo []
+               :max-crew 4
+               :max-cargo 4
                :docked? true}]
     (atom (assoc state :card (draw-next-card state)))))
 
@@ -27,7 +30,8 @@
 (defcomponent card-view [data owner]
   (render [_]
     (dom/div {:class "card"}
-      (:text data))))
+      (dom/span {:class "speaker"} (:speaker data))
+      " " (:text data))))
 
 (defcomponent choice-buttons [data owner]
   (render [_]
