@@ -19,7 +19,8 @@
                :cargo []
                :max-crew 4
                :max-cargo 4
-               :docked? true}]
+               :docked? true
+               :location "Starport Virgil, Despard’s Gate"}]
     (atom (assoc state :card (draw-next-card state)))))
 
 (defn handle-choice [decision state]
@@ -98,6 +99,10 @@
 (defcomponent app [data owner]
   (render [_]
     (dom/div {:class "app"}
+      (dom/div {:class "location"}
+        (if (:docked? data)
+          (:location data)
+          (str "En route to: " (:destination data))))
       (om/build card-view (:card data))
       (om/build choice-buttons data)
       (om/build stat-bars (:stats data))
