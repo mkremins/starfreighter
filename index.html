@@ -90,18 +90,28 @@
   .stat.ship .stat-bar-fill { background: chocolate; }
   .stat.crew .stat-bar-fill { background: cadetblue; }
   /* lists */
-  .empty {
-    color: #aaa;
-    font-style: italic;
+  .lists {
+    display: flex;
+  }
+  .list {
+    width: 47.5%;
+  }
+  .list.crew {
+    margin-right: 2.5%;
+  }
+  .list.cargo {
+    margin-left: 2.5%;
   }
   h2 {
-    margin-bottom: 5px;
+    margin-bottom: .75rem;
   }
-  /* crew list */
-  .crew-list {
-    margin-bottom: 1.5rem;
+  .slot {
+    background: #333;
+    margin-bottom: .75rem;
+    line-height: 1.1; /* to keep inline emoji from expanding the slot height */
+    padding: .5rem;
+    white-space: pre;
   }
-  /* cargo list */
   </style>
 </head>
 <body>

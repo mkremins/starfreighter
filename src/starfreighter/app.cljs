@@ -53,40 +53,47 @@
             (dom/div {:class "stat-bar-fill"
                       :style {:width (str (get data stat-name) "%")}})))))))
 
-(defcomponent crew-member [data owner]
+(defcomponent crew-slot [data owner]
   (render [_]
-    (dom/p {:class "crew-member"}
-      (dom/strong (:name data))
-      (let [traits (:traits data)]
-        (when (pos? (count traits))
-          (str " [" (str/join "; " (map name traits)) "]"))))))
+    (dom/p {:class "slot crew"}
+      (if data
+        (dom/span {}
+          (:name data)
+          (let [traits (:traits data)
+                icons  {:fighter "👊"
+                        :medic "💊"
+                        :mechanic "🔧"}]
+            (when (pos? (count traits))
+              (str " " (str/join (map icons traits))))))
+        " "))))
 
 (defcomponent crew-list [data owner]
   (render [_]
-    (dom/div {:class "crew-list"}
-      (dom/h2 "crew")
+    (dom/div {:class "list crew"}
+      (dom/h2 "Crew")
       (dom/div {}
-        (if (zero? (count data))
-          (dom/span {:class "empty"} "No crew to show")
-          (om/build-all crew-member data))))))
+        (for [i (range (:max-crew data))]
+          (om/build crew-slot (get (:crew data) i)))))))
 
-(defcomponent cargo-item [data owner]
+(defcomponent cargo-slot [data owner]
   (render [_]
-    (dom/p {:class "cargo-item"}
-      (dom/strong (:name data))
-      (let [destination (:destination data)]
-        (if destination
-          (str " [destination: " destination "]")
-          "")))))
+    (dom/p {:class "slot cargo"}
+      (if data
+        (dom/span {}
+          (:name data)
+          (let [destination (:destination data)]
+            (if destination
+              (str " ➡️ " destination)
+              "")))
+        " "))))
 
 (defcomponent cargo-list [data owner]
   (render [_]
-    (dom/div {:class "cargo-list"}
-      (dom/h2 "cargo")
+    (dom/div {:class "list cargo"}
+      (dom/h2 "Cargo")
       (dom/div {}
-        (if (zero? (count data))
-          (dom/span {:class "empty"} "No cargo to show")
-          (om/build-all cargo-item data))))))
+        (for [i (range (:max-cargo data))]
+          (om/build cargo-slot (get (:cargo data) i)))))))
 
 (defcomponent app [data owner]
   (render [_]
@@ -94,8 +101,9 @@
       (om/build card-view (:card data))
       (om/build choice-buttons data)
       (om/build stat-bars (:stats data))
-      (om/build crew-list (:crew data))
-      (om/build cargo-list (:cargo data)))))
+      (dom/div {:class "lists"}
+        (om/build crew-list data)
+        (om/build cargo-list data)))))
 
 (defn init! []
   (enable-console-print!)
