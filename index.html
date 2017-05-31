@@ -24,11 +24,12 @@
   /* card */
   .card {
     background: #555;
-    border: 1px solid #eee;
-    border-radius: 1em;
+    border: 1px solid #aaa;
+    border-bottom-width: 0;
+    border-top-left-radius: 9px;
+    border-top-right-radius: 9px;
     font-size: 18px;
     height: 8em;
-    margin-bottom: 1.5rem;
     padding: 1em;
   }
   /* choices */
@@ -38,14 +39,21 @@
   }
   .choice {
     background: #555;
-    border: 1px solid #eee;
-    border-radius: 1em;
+    border: 1px solid #aaa;
     cursor: pointer;
     font-size: 32px;
-    margin-left: 5%;
     padding-top: 5px;
     text-align: center;
-    width: 42.5%;
+    width: 50%;
+  }
+  .choice.yes {
+    background: darkgreen;
+    border-bottom-right-radius: 9px;
+  }
+  .choice.no {
+    background: brown;
+    border-bottom-left-radius: 9px;
+    border-right-width: 0;
   }
   /* stats */
   .stats {
@@ -72,12 +80,9 @@
     height: 20px;
     position: absolute;
   }
-  .stat.cash { color: green; }
-  .stat.ship { color: orange; }
-  .stat.crew { color: purple; }
-  .stat.cash .stat-bar-fill { background: green; }
-  .stat.ship .stat-bar-fill { background: orange; }
-  .stat.crew .stat-bar-fill { background: purple; }
+  .stat.cash .stat-bar-fill { background: olivedrab; }
+  .stat.ship .stat-bar-fill { background: chocolate; }
+  .stat.crew .stat-bar-fill { background: cadetblue; }
   /* lists */
   .empty {
     color: #aaa;
