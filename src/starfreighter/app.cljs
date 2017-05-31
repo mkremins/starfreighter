@@ -13,7 +13,7 @@
                :max-crew 4
                :max-cargo 4
                :docked? true
-               :location "Starport Virgil, Despard’s Gate"}]
+               :location (rand-nth cards/places)}]
     (assoc state :card (cards/draw-next-card state))))
 
 (defonce app-state
