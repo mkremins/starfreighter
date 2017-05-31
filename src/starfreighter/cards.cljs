@@ -23,6 +23,10 @@
   ([stat amount] #(has-at-most? % stat amount))
   ([state stat amount] (<= (get-in state [:stats stat]) amount)))
 
+(defn has-crew-with-trait?
+  ([trait] #(has-crew-with-trait? % trait))
+  ([state trait] (some #(contains? (:traits %) trait) (:crew state))))
+
 (defn adjust-stat [state stat amount]
   (update-in state [:stats stat] #(-> % (+ amount) (min 100) (max 0))))
 
@@ -94,4 +98,13 @@
 ])
 
 (defonce starbound-deck [
+{:prereq (constantly true)
+ :weight (constantly 1)
+ :dynamic? true
+ :gen (fn [state]
+        (let [mechanic-if-any (first (filter #(contains? (:traits %) :mechanic) (:crew state)))]
+          {:speaker (:name (or mechanic-if-any (rand-nth (:crew state))))
+           :text "Cap’n, I think something big just hit the ship! Should I go take a look?"
+           :yes #(adjust-stat % :ship (if mechanic-if-any -10 -15))
+           :no #(adjust-stat % :ship -20)}))}
 ])
