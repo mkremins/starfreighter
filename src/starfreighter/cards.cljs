@@ -73,14 +73,25 @@
            :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
            :ok #(assoc % :cargo (vec keeping))}))}
 
+{:prereq (every-pred (has-at-most? :ship 80) (has-at-least? :cash 40))
+ :weight (constantly 4)
+ :gen (fn [state]
+        {:type :yes-no
+         :speaker (gen/gen-name)
+         :text (str "Looks like your ship’s in need of some repair – it’s practically falling apart! "
+                    "Want me to help you out with that?")
+         :yes #(-> % (adjust-stat :cash -40)
+                     (adjust-stat :ship +20))
+         :no identity})}
+
 {:prereq can-hold-more-cargo?
  :weight (constantly 8)
  :gen (fn [state]
         (let [stuff      (rand-nth goods)
               dest       (rand-destination state)
               split-pay? (rand-nth [true false])
-              pay-now    (if split-pay? 10 0)
-              pay-later  (if split-pay? 10 20)]
+              pay-now    (if split-pay? 5 0)
+              pay-later  (if split-pay? 5 10)]
           {:type :yes-no
            :speaker (gen/gen-name)
            :text (str "I’d like to enlist your services, Captain. Can you deliver this shipment of "
@@ -113,7 +124,7 @@
            :speaker name
            :text (str "I’m in need of safe passage to " dest ". Can you take me there?")
            :yes #(-> % (update :cargo conj {:name name :destination dest :passenger? true})
-                       (adjust-stat :cash 20))
+                       (adjust-stat :cash 10))
            :no identity}))}
 
 {:prereq (every-pred can-hold-more-crew? (has-at-least? :cash 30))
