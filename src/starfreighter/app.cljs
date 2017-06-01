@@ -56,12 +56,16 @@
 (defcomponent stat-bars [data owner]
   (render [_]
     (dom/div {:class "stats"}
-      (for [[stat-name icon] [[:cash "💰"] [:ship "🚀"] [:crew "😐"]]]
-        (dom/div {:class (str "stat " (name stat-name))}
-          (dom/div {:class "stat-label"} icon)
-          (dom/div {:class "stat-bar"}
-            (dom/div {:class "stat-bar-fill"
-                      :style {:width (str (get data stat-name) "%")}})))))))
+      (let [crew-icon
+            (->> [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]]
+                 (drop-while (fn [[threshold _]] (> (:crew data) threshold)))
+                 first second)]
+        (for [[stat icon] [[:cash "💰"] [:ship "🚀"] [:crew crew-icon]]]
+          (dom/div {:class (str "stat " (name stat))}
+            (dom/div {:class "stat-label"} icon)
+            (dom/div {:class "stat-bar"}
+              (dom/div {:class "stat-bar-fill"
+                        :style {:width (str (get data stat) "%")}}))))))))
 
 (defcomponent crew-slot [data owner]
   (render [_]
