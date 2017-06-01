@@ -22,7 +22,8 @@
 (defn handle-choice [decision state]
   (let [update-fn (get-in state [:card decision])
         state'    (update-fn state)]
-    (assoc state' :card (cards/draw-next-card state'))))
+    (cond-> (assoc state' :card (cards/draw-next-card state'))
+            :next-card (dissoc :next-card))))
 
 (defcomponent card-view [data owner]
   (render [_]

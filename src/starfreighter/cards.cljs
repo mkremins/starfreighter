@@ -152,7 +152,7 @@
 
 (defonce starbound-deck [
 {:prereq (constantly true)
- :weight (constantly 1)
+ :weight (constantly 10)
  :gen (fn [state]
         (let [mechanic-if-any (crew-member-with-trait state :mechanic)]
           {:type :info
@@ -160,8 +160,35 @@
            :text "What in the blazes was that?! Cap’n, I think something big just hit the ship!"
            :ok #(adjust-stat % :ship -10)}))}
 
+{:prereq (every-pred (crew-member-with-trait :mechanic) (has-at-most? :ship 60))
+ :weight #(if (<= (:ship (:stats %)) 20) 2 1)
+ :gen (fn [state]
+        (let [mechanic (crew-member-with-trait state :mechanic)
+              would-succeed? (rand-nth [true true false])
+              next-if-yes
+              (if would-succeed?
+                {:type :info
+                 :speaker (:name mechanic)
+                 :text "Hah! Toldja I was up to the task."
+                 :ok #(adjust-stat % :crew +10)}
+                (let [speaker (or (first (filter #(not= % mechanic) (shuffle (:crew state)))) mechanic)]
+                  {:type :info
+                   :speaker (:name speaker)
+                   :text (if (= speaker mechanic)
+                           "Dammit… apparently you shouldn’t have trusted me after all."
+                           (str "What a disaster! It’s just like I’m always saying: you can’t trust "
+                                (:name mechanic) " with anything complicated. You should know that by now!"))
+                   :ok #(adjust-stat % :crew -10)}))]
+          {:type :yes-no
+           :speaker (:name mechanic)
+           :text (str "The engine’s really struggling, but I think I might know how to fix it! "
+                      "It’s a bit dangerous, though. Can I give it a try?")
+           :yes #(-> % (assoc :next-card next-if-yes)
+                       (adjust-stat :ship (if would-succeed? +10 -15)))
+           :no identity}))}
+
 {:prereq (constantly true)
- :weight (constantly 1)
+ :weight (constantly 4)
  :gen (fn [state]
         {:type :info
          :speaker (:name (rand-nth (:crew state)))
@@ -185,6 +212,7 @@
 
 (defn draw-next-card [state]
   (or (applicable-game-over-if-any state)
+      (:next-card state)
       (let [deck     (if (:docked? state) port-deck starbound-deck)
             pickable (filter #((:prereq %) state) deck)
             weights  (zipmap pickable (map #((:weight %) state) pickable))
