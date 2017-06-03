@@ -46,35 +46,8 @@
   (update-in state [:stats stat] #(-> % (+ amount) (min 100) (max 0))))
 
 (defonce port-deck [
-;; on arrival, drop off (and cash in) cargo you're supposed to deliver
-{:prereq has-cargo-to-drop?
- :weight (constantly 50)
- :gen (fn [state]
-        (let [[dropping keeping]
-              (util/sift #(and (not (:passenger? %))
-                               (= (:destination %) (:location state)))
-                         (:cargo state))]
-          {:type :info
-           :speaker (:name (rand-nth (:crew state)))
-           :text "I’ll go drop off the goods we’re supposed to deliver."
-           :ok #(-> % (assoc :cargo (vec keeping))
-                      (adjust-stat :cash (reduce + (map :pay dropping))))}))}
-
-;; on arrival, drop off passengers you're supposed to deliver
-{:prereq has-passengers-to-drop?
- :weight (constantly 50)
- :gen (fn [state]
-        (let [[dropping keeping]
-              (util/sift #(and (:passenger? %)
-                               (= (:destination %) (:location state)))
-                         (:cargo state))]
-          {:type :info
-           :speaker (:name (rand-nth dropping))
-           :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
-           :ok #(assoc % :cargo (vec keeping))}))}
-
 {:prereq (every-pred (has-at-most? :ship 80) (has-at-least? :cash 40))
- :weight (constantly 4)
+ :weight #(util/bucket (:ship (:stats %)) [[20 8] [40 6] [100 4]])
  :gen (fn [state]
         {:type :yes-no
          :speaker (gen/gen-name)
@@ -138,12 +111,36 @@
                        (adjust-stat :cash -30))
            :no identity}))}
 
+{:prereq (every-pred #(< (:max-crew %) 6) (has-at-least? :cash 60))
+ :weight (constantly 1)
+ :gen (fn [state]
+        {:type :yes-no
+         :speaker (gen/gen-name)
+         :text (str "Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
+                    "to give you a little more breathing room… for a fair price, of course.")
+         :yes #(-> % (update :max-crew inc)
+                     (adjust-stat :cash -60))
+         :no identity})}
+
+{:prereq (every-pred #(< (:max-cargo %) 6) (has-at-least? :cash 60))
+ :weight (constantly 1)
+ :gen (fn [state]
+        {:type :yes-no
+         :speaker (gen/gen-name)
+         :text (str "You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
+                    "How about I do you a favor and modify this bucket of bolts? For a price, of course.")
+         :yes #(-> % (update :max-cargo inc)
+                     (adjust-stat :cash -60))
+         :no identity})}
+
 {:prereq #(>= (count (:cargo %)) 2)
- :weight (constantly 4)
+ :weight #(util/bucket (count (:cargo %)) [[2 1] [3 2] [4 4]])
  :gen (fn [state]
         {:type :yes-no
          :speaker (:name (rand-nth (:crew state)))
-         :text "We’re all getting pretty restless, Cap’n. How about we get a move on already?"
+         :text (rand-nth ["We’re all getting pretty restless, Cap’n. How about we get a move on already?"
+                          (str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings to be had round here "
+                               "are pretty slim. What do you say we shove off now?")])
          :yes #(assoc % :docked? false
                         :destination (or (rand-nth (map :destination (:cargo %)))
                                          (rand-destination state)))
@@ -159,6 +156,38 @@
            :speaker (:name (or mechanic-if-any (rand-nth (:crew state))))
            :text "What in the blazes was that?! Cap’n, I think something big just hit the ship!"
            :ok #(adjust-stat % :ship -10)}))}
+
+{:prereq #(> (count (:crew %)) 1)
+ :weight #(if (>= (:crew (:stats %)) 60) 4 2)
+ :gen (fn [state]
+        (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
+          {:type :info
+           :speaker (:name crew-1)
+           :text (str "Y’know, Cap’n, " (:name crew-2) " and I don’t always "
+                      (rand-nth ["agree on everything"
+                                 "get along"
+                                 "get along so well"
+                                 "see eye-to-eye"])
+                      ". But lately, I’ve really been enjoying "
+                      (rand-nth ["having them around"
+                                 "having them around the ship"
+                                 "their company"])
+                      ". "
+                      (rand-nth [""
+                                 (str (rand-nth ["Certainly helps keep"
+                                                 "Certainly keeps"
+                                                 "Definitely helps keep"
+                                                 "Definitely keeps"
+                                                 "It certainly helps keep"
+                                                 "It certainly keeps"
+                                                 "It definitely helps keep"
+                                                 "It definitely keeps"
+                                                 "It keeps"
+                                                 "Keeps"])
+                                      " "
+                                      (rand-nth ["me from getting bored!"
+                                                 "the boredom away!"]))]))
+           :ok #(adjust-stat % :crew +5)}))}
 
 {:prereq (every-pred (crew-member-with-trait :mechanic) (has-at-most? :ship 60))
  :weight #(if (<= (:ship (:stats %)) 20) 2 1)
@@ -210,8 +239,33 @@
     :else
       nil))
 
+(defn applicable-arrival-if-any [state]
+  (cond
+    ;; drop off (and cash in) cargo you're supposed to deliver
+    (has-cargo-to-drop? state)
+      (let [[dropping keeping]
+            (util/sift #(and (not (:passenger? %))
+                             (= (:destination %) (:location state)))
+                       (:cargo state))]
+        {:type :info
+         :speaker (:name (rand-nth (:crew state)))
+         :text "I’ll go drop off the goods we’re supposed to deliver."
+         :ok #(-> % (assoc :cargo (vec keeping))
+                    (adjust-stat :cash (reduce + (map :pay dropping))))})
+    ;; drop off passengers you're supposed to deliver
+    (has-passengers-to-drop? state)
+      (let [[dropping keeping]
+            (util/sift #(and (:passenger? %)
+                             (= (:destination %) (:location state)))
+                       (:cargo state))]
+        {:type :info
+         :speaker (:name (rand-nth dropping))
+         :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
+         :ok #(assoc % :cargo (vec keeping))})))
+
 (defn draw-next-card [state]
   (or (applicable-game-over-if-any state)
+      (applicable-arrival-if-any state)
       (:next-card state)
       (let [deck     (if (:docked? state) port-deck starbound-deck)
             pickable (filter #((:prereq %) state) deck)

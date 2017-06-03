@@ -4,7 +4,8 @@
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
-            [starfreighter.gen :as gen]))
+            [starfreighter.gen :as gen]
+            [starfreighter.util :as util]))
 
 (defn restart-game [& _]
   (let [state {:stats {:cash 50 :ship 50 :crew 50}
@@ -57,9 +58,8 @@
   (render [_]
     (dom/div {:class "stats"}
       (let [crew-icon
-            (->> [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]]
-                 (drop-while (fn [[threshold _]] (> (:crew data) threshold)))
-                 first second)]
+            (util/bucket (:crew data)
+              [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]])]
         (for [[stat icon] [[:cash "💰"] [:ship "🚀"] [:crew crew-icon]]]
           (dom/div {:class (str "stat " (name stat))}
             (dom/div {:class "stat-label"} icon)
