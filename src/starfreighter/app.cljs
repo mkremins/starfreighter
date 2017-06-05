@@ -8,11 +8,11 @@
             [starfreighter.util :as util]))
 
 (defn restart-game [& _]
-  (let [state {:stats {:cash 50 :ship 50 :crew 50}
+  (let [state {:stats {:cash 40 :ship 40 :crew 40}
                :crew [(gen/gen-character) (gen/gen-character)]
                :cargo []
-               :max-crew 4
-               :max-cargo 4
+               :max-crew 3
+               :max-cargo 3
                :docked? true
                :location (rand-nth cards/places)
                :turn 0}
