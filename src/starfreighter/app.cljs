@@ -9,27 +9,33 @@
 
 (defn restart-game [& _]
   (let [state {:stats {:cash 50 :ship 50 :crew 50}
-               :crew [(gen/gen-crew-member) (gen/gen-crew-member)]
+               :crew [(gen/gen-character) (gen/gen-character)]
                :cargo []
                :max-crew 4
                :max-cargo 4
                :docked? true
-               :location (rand-nth cards/places)}]
-    (assoc state :card (cards/draw-next-card state))))
+               :location (rand-nth cards/places)}
+        card (cards/draw-next-card state)]
+    (assoc state :card card :recent-picks #{(:id card)})))
 
 (defonce app-state
   (atom (restart-game)))
 
 (defn handle-choice [decision state]
   (let [update-fn (get-in state [:card decision])
-        state'    (update-fn state)]
-    (cond-> (assoc state' :card (cards/draw-next-card state'))
-            :next-card (dissoc :next-card))))
+        state' (update-fn state)
+        card (cards/draw-next-card state')]
+    (-> state'
+        (assoc :card card)
+        (update :recent-picks conj (:id card))
+        (dissoc :next-card))))
 
 (defcomponent card-view [data owner]
   (render [_]
     (dom/div {:class "card"}
-      (dom/span {:class "speaker"} (:speaker data))
+      (dom/span {:class "speaker"}
+        (let [speaker (:speaker data)]
+          (cond-> speaker (not (string? speaker)) :name)))
       " " (:text data)
       (when (= (:type data) :game-over)
         (dom/p {:class "game-over"} "[Game Over]")))))
