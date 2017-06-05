@@ -52,14 +52,14 @@
 
 (defonce port-deck [
 {:id :offer-repair-ship
- :prereq (every-pred (has-at-most? :ship 70) (has-at-least? :cash 35))
+ :prereq (every-pred (has-at-most? :ship 70) (has-at-least? :cash 40))
  :weight #(util/bucket (:ship (:stats %)) [[20 16] [40 6] [100 4]])
  :gen (fn [state]
         {:type :yes-no
          :speaker (gen/gen-character)
          :text (str "Looks like your ship’s in need of some repair – it’s practically falling apart! "
                     "Want me to help you out with that?")
-         :yes #(-> % (adjust-stat :cash -35)
+         :yes #(-> % (adjust-stat :cash -40)
                      (adjust-stat :ship +30))
          :no identity})}
 
@@ -122,7 +122,7 @@
                             :text (str (rand-nth ["Hey…"
                                                   "Hey, hold on a second…"
                                                   "Hey, wait a minute…"])
-                                       " what’re you trynna pull? This " stuff " is counterfeit! "
+                                       " what’re you trying to pull? This " stuff " is counterfeit! "
                                        "Ain’t even worth a quarter credit!")
                             :ok (adjust-stat :cash (- amount))})))}))}
 
@@ -177,6 +177,90 @@
                      (adjust-stat :cash -60))
          :no identity})}
 
+{:id :offer-loan
+ :prereq (every-pred (has-at-most? :cash 40) #(not (:loan-info %)))
+ :weight #(util/bucket (:cash (:stats %)) [[10 4] [20 3] [30 2] [40 1]])
+ :gen (fn [state]
+        (let [creditor (gen/gen-character)]
+          {:type :yes-no
+           :speaker creditor
+           :text (str "So, I hear tell you’re strapped for cash. I could certainly lend you some… "
+                      "provided you agree to pay it back promptly, plus a bit of interest. "
+                      "What do you say?")
+           :yes #(-> % (assoc :loan-info {:creditor creditor :turn-borrowed (:turn state)})
+                       (adjust-stat :cash +40))
+           :no identity}))}
+
+{:id :collect-loan
+ :prereq #(and (:loan-info %)
+               (not (:collection-failed? (:loan-info %)))
+               (>= (- (:turn %) (:turn-borrowed (:loan-info %))) 20))
+ :weight #(util/bucket (- (:turn %) (:turn-borrowed (:loan-info %)))
+            [[25 1] [30 2] [35 4] [40 8] [45 16] [50 32] [1000 100]])
+ :gen (fn [state]
+        (let [collector (gen/gen-character)
+              creditor  (:creditor (:loan-info state))
+              pay-up
+              {:type :info
+               :speaker collector
+               :text (str "Pleasure doing business with you, Captain. "
+                          (:shortname creditor) " sends their regards!")
+               :ok #(dissoc % :loan-info)}
+              surrender
+              {:type :game-over
+               :text (str "Your ship is repossessed and your remaining assets seized. "
+                          "Your only hope is that they are collectively worth enough "
+                          "to clear the debt and keep you out of indentured servitude "
+                          "to " (:name creditor) ".")}
+              fight-outcome
+              (let [fight-score (reduce + (map #(if (contains? (:traits %) :fighter) 2 1) (:crew state)))
+                    enemy-fight-score (+ 2 (rand-int 4))
+                    fighter-if-any (first (filter #(contains? (:traits %) :fighter) (:crew state)))]
+                (cond
+                  (> fight-score enemy-fight-score)
+                    {:type :info
+                     :speaker (or fighter-if-any (rand-nth (:crew state)))
+                     :text (str "Yee-haw, look at ‘em run! All you gotta do is zap the leader "
+                                "and the rest’ll go running for the hills.")
+                     :ok #(-> % (adjust-stat :crew +15)
+                                (assoc-in [:loan-info :collection-failed?] true))}
+                  (= fight-score enemy-fight-score)
+                    {:type :info
+                     :speaker collector
+                     :text (str "Well then… looks like this is my cue to exit. When next we meet, "
+                                "please do try to be a bit more civil – otherwise I might have to do "
+                                "something we’ll both regret.")
+                     :ok #(update % :loan-info assoc :collection-failed? true :collector collector)}
+                  (< fight-score enemy-fight-score)
+                    {:type :game-over
+                     :deadly? true
+                     :text (str "All at once, your chest lights up with pain, and you instinctively "
+                                "gasp for air. The last thing you see before you lose consciousness is "
+                                "the slight frown of disappointment on " (:name collector) "’s face.")}))
+              fight
+              {:type :info
+               :text (str "You’re not sure who shoots first. Your crew are quick on the draw, "
+                          "but so are " (:shortname collector) "’s goons. Dust flies in your face "
+                          "as you duck for cover, the air around you full of searing light.")
+               :icon "💥"
+               :ok #(assoc % :next-card fight-outcome)}
+              cant-afford
+              {:type :yes-no
+               :speaker collector
+               :text (str "Ah, you can’t afford it? That is indeed a problem. "
+                          "In that case, I’m afraid I’ll have to ask you to surrender your vessel "
+                          "and submit to arrest. We must recoup our losses somehow…")
+               :yes #(-> % (adjust-stat :cash -100)
+                           (assoc :next-card surrender))
+               :no #(assoc % :next-card fight)}]
+          {:type :yes-no
+           :speaker collector
+           :text (str "Hello, Captain. Remember that money you borrowed from "
+                      (:name creditor) "? Well, I’ve been sent to collect it! "
+                      "Can we all agree to do this the easy way?")
+           :yes #(assoc % :next-card (if (has-at-least? % :cash 50) pay-up cant-afford))
+           :no  #(assoc % :next-card fight)}))}
+
 {:id :request-bonus
  :prereq (has-at-least? :cash 40)
  :weight #(+ (util/bucket (:cash (:stats %)) [[60 1] [80 2] [100 3]])
@@ -202,8 +286,8 @@
                           (str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings to be had round here "
                                "are pretty slim. What do you say we shove off now?")])
          :yes #(assoc % :docked? false
-                        :destination (or (rand-nth (filter identity (map :destination (:cargo %))))
-                                         (rand-destination state))
+                        :destination (let [dests (filter identity (map :destination (:cargo %)))]
+                                       (if (seq dests) (rand-nth dests) (rand-destination state)))
                         :recent-picks #{})
          :no (adjust-stat :crew -5)})}
 ])
@@ -216,8 +300,45 @@
         (let [mechanic-if-any (crew-member-with-trait state :mechanic)]
           {:type :info
            :speaker (or mechanic-if-any (rand-nth (:crew state)))
-           :text "What in the blazes was that?! Cap’n, I think something big just hit the ship!"
+           :text (str (rand-nth ["" "" "Ack! " "Ouch! "])
+                      (rand-nth ["What in the blazes was that?!"
+                                 "What in the name of Zark was that?!"
+                                 "What just happened?!"
+                                 "What was that?!"])
+                      " "
+                      (rand-nth ["Cap’n, I think" "Felt like" "I think" "Sounds like"])
+                      " something big "
+                      (rand-nth ["" "might’ve "])
+                      "just "
+                      (rand-nth ["bounced off" "crashed into" "hit"])
+                      " the ship!")
            :ok (adjust-stat :ship -10)}))}
+
+{:id :info-ship-repaired
+ :prereq (every-pred (has-at-most? :ship 95) (crew-member-with-trait :mechanic))
+ :weight #(util/bucket (:ship (:stats %)) [[20 2] [40 4] [60 2] [100 1]])
+ :gen (fn [state]
+        {:type :info
+         :speaker (crew-member-with-trait state :mechanic)
+         :text (str "I’ve managed to make a few tweaks that might get this "
+                    (rand-nth ["hunk of junk" "rust bucket"])
+                    " running a little smoother. Hopefully it’ll "
+                    (rand-nth ["" "be enough to "])
+                    (rand-nth ["keep us going" "keep us moving" "tide us over"])
+                    " until we can get a proper repair done in port.")
+         :ok (adjust-stat :ship +5)})}
+
+{:id :request-promise-cash
+ :prereq (has-at-most? :cash 0)
+ :weight (constantly 8)
+ :gen (fn [state]
+        {:type :yes-no
+         :speaker (rand-nth (:crew state))
+         :text (str "I am starving! I know money’s tight and all, Cap’n, but can you please "
+                    "promise me we’ll at least earn enough at " (:destination state)
+                    " to stock up on food before we leave port again?")
+         :yes (adjust-stat :crew -10)
+         :no (adjust-stat :crew -15)})}
 
 {:id :info-crew-friendly
  :prereq #(and (> (count (:crew %)) 1)
@@ -261,8 +382,10 @@
         (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
           {:type :info
            :speaker crew-1
-           :text (str "I can’t stand it anymore. " (:shortname crew-2) " is driving me insane!")
-           :ok (adjust-stat :crew -5)}))}
+           :text (str "I can’t stand it anymore. " (:shortname crew-2) " "
+                      (rand-nth ["is driving me" "is going to drive me"]) " "
+                      (rand-nth ["crazy" "insane" "mad" "nuts"]) "!")
+           :ok (adjust-stat :crew -10)}))}
 
 {:id :offer-passenger-join-crew
  :prereq (every-pred can-hold-more-crew?

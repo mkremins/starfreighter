@@ -14,7 +14,8 @@
                :max-crew 4
                :max-cargo 4
                :docked? true
-               :location (rand-nth cards/places)}
+               :location (rand-nth cards/places)
+               :turn 0}
         card (cards/draw-next-card state)]
     (assoc state :card card :recent-picks #{(:id card)})))
 
@@ -28,6 +29,7 @@
     (-> state'
         (assoc :card card)
         (update :recent-picks conj (:id card))
+        (update :turn inc)
         (dissoc :next-card))))
 
 (defcomponent card-view [data owner]
@@ -54,7 +56,7 @@
         :info
           (dom/div {:class "choice ok"
                     :on-click #(om/transact! data (partial handle-choice :ok))}
-            "👌")
+            (or (:icon (:card data)) "👌"))
         :game-over
           (dom/div {:class "choice restart"
                     :on-click #(om/transact! data restart-game)}
