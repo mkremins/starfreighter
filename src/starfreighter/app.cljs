@@ -8,16 +8,21 @@
             [starfreighter.util :as util]))
 
 (defn restart-game [& _]
-  (let [state {:stats {:cash 40 :ship 40 :crew 40}
-               :crew [(gen/gen-character) (gen/gen-character)]
+  (let [places (gen/gen-places)
+        place (get places (rand-nth (keys places)))
+        state {:stats {:cash 40 :ship 40 :crew 40}
+               :crew [(gen/gen-character place) (gen/gen-character place)]
                :cargo []
                :max-crew 3
                :max-cargo 3
+               :places places
                :docked? true
-               :location (rand-nth cards/places)
-               :turn 0}
+               :location (:name place)
+               :turn 0
+               :recent-picks #{:offer-join-crew}} ; to simulate having just "hired" starting crew
         card (cards/draw-next-card state)]
-    (assoc state :card card :recent-picks #{(:id card)})))
+    (-> state (assoc :card card)
+              (update :recent-picks conj (:id card)))))
 
 (defonce app-state
   (atom (restart-game)))

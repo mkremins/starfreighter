@@ -3,19 +3,16 @@
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
-(defonce places [
-"Cael" "Dolor" "Esgar" "Firth" "Gennar" "Laudan" "Maurni" "Rigel" "Salvation" "Torek"
-])
-
-(defonce goods [
-"antimatter" "carbon dioxide" "dark matter" "fertilizer" "grain" "oxygen" "spice"
-])
-
 (defn passengers [state]
   (filter :passenger? (:cargo state)))
 
+(defn current-place [state]
+  (get (:places state) (:location state)))
+
 (defn rand-destination [state]
-  (rand-nth (filter #(not= % (:location state)) places)))
+  (rand-nth
+    (conj (:common-destinations (current-place state))
+          (rand-nth (remove #{(:location state)} (keys (:places state)))))))
 
 (defn open-cargo-slots [state]
   (- (:max-cargo state) (count (:cargo state))))
@@ -66,7 +63,7 @@
  :weight #(util/bucket (:ship (:stats %)) [[20 16] [40 6] [100 4]])
  :gen (fn [state]
         {:type :yes-no
-         :speaker (gen/gen-character)
+         :speaker (rand-nth (:merchants (current-place state)))
          :text (str "Looks like your ship’s in need of some repair – it’s practically falling apart! "
                     "Want me to help you out with that?")
          :yes #(-> % (adjust-stat :cash -40)
@@ -78,13 +75,14 @@
  :prereq can-hold-more-cargo?
  :weight #(* 4 (open-cargo-slots %))
  :gen (fn [state]
-        (let [stuff      (rand-nth goods)
+        (let [place      (current-place state)
+              stuff      (rand-nth (:exports place))
               dest       (rand-destination state)
               split-pay? (rand-nth [true false])
               pay-now    (if split-pay? 5 0)
               pay-later  (if split-pay? 5 10)]
           {:type :yes-no
-           :speaker (gen/gen-character)
+           :speaker (rand-nth (:merchants place))
            :text (str (rand-nth ["I’d like to enlist your services"
                                  "I’ve got a job for you"
                                  "I have a job for you"])
@@ -110,9 +108,10 @@
  :prereq (every-pred can-hold-more-cargo? (has-at-least? :cash 20))
  :weight open-cargo-slots
  :gen (fn [state]
-        (let [stuff (rand-nth goods)]
+        (let [place (current-place state)
+              stuff (rand-nth (:exports place))]
           {:type :yes-no
-           :speaker (gen/gen-character)
+           :speaker (rand-nth (:merchants place))
            :text (str "Looking for " stuff "? "
                       (rand-nth [(str (rand-nth ["Boy howdy, have" "Have"]) " I got a "
                                       (rand-nth ["" "great "]) "deal for you")
@@ -133,12 +132,14 @@
  :repeatable? true
  :prereq (every-pred has-freely-sellable-cargo?
                      #(not (contains? (:recent-picks %) :offer-sell-cargo)))
+ ;; TODO adjust weight significantly upward if player has an import specific to this place
  :weight #(* 2 (count (filter freely-sellable? (:cargo %))))
  :gen (fn [state]
-        (let [item    (rand-nth (filter freely-sellable? (:cargo state)))
+        (let [place   (current-place state)
+              item    (rand-nth (filter freely-sellable? (:cargo state)))
               stuff   (:name item)
-              speaker (gen/gen-character)
-              amount  (rand-nth [+20 +20 +30])]
+              speaker (rand-nth (:merchants place))
+              amount  (if (contains? (:imports place) stuff) +30 +20)]
           {:type :yes-no
            :speaker speaker
            :text (str (rand-nth ["Greetings" "Hello"])
@@ -173,7 +174,8 @@
  :weight (constantly 4)
  :gen (fn [state]
         (let [dest (rand-destination state)
-              char (assoc (gen/gen-character) :destination dest :passenger? true)]
+              char (assoc (gen/gen-character (current-place state))
+                          :destination dest :passenger? true)]
           {:type :yes-no
            :speaker char
            :text (str "I’m in need of safe passage to " dest ". Can you take me there?")
@@ -185,8 +187,8 @@
  :repeatable? true
  :prereq (every-pred can-hold-more-crew? (has-at-least? :cash 30))
  :weight open-crew-slots
- :gen (fn [_]
-        (let [char (gen/gen-character)]
+ :gen (fn [state]
+        (let [char (gen/gen-character (current-place state))]
           {:type :yes-no
            :speaker char
            :text (str (rand-nth ["Excuse me, Captain. "
@@ -238,7 +240,7 @@
  :weight #(if (can-hold-more-crew? %) 1 2)
  :gen (fn [state]
         {:type :yes-no
-         :speaker (gen/gen-character)
+         :speaker (rand-nth (:merchants (current-place state)))
          :text (str "Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
                     "to give you a little more breathing room… for a fair price, of course.")
          :yes #(-> % (update :max-crew inc)
@@ -250,7 +252,7 @@
  :weight #(if (can-hold-more-cargo? %) 1 2)
  :gen (fn [state]
         {:type :yes-no
-         :speaker (gen/gen-character)
+         :speaker (rand-nth (:merchants (current-place state)))
          :text (str "You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
                     "How about I do you a favor and modify this bucket of bolts? For a price, of course.")
          :yes #(-> % (update :max-cargo inc)
@@ -261,7 +263,8 @@
  :prereq (every-pred (has-at-most? :cash 30) #(not (:loan-info %)))
  :weight #(util/bucket (:cash (:stats %)) [[10 4] [20 3] [30 2]])
  :gen (fn [state]
-        (let [creditor (gen/gen-character)]
+        (let [place    (current-place state)
+              creditor (rand-nth (:merchants place))]
           {:type :yes-no
            :speaker creditor
            :text (str (rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
@@ -270,7 +273,10 @@
                       " cash. I could certainly lend you some… "
                       "provided you agree to pay it back promptly, plus a bit of interest. "
                       (rand-nth ["Do we have a deal?" "What do you say?"]))
-           :yes #(-> % (assoc :loan-info {:creditor creditor :turn-borrowed (:turn state)})
+           :yes #(-> % (assoc :loan-info
+                         {:creditor creditor
+                          :collector (gen/gen-character place)
+                          :turn-borrowed (:turn state)})
                        (adjust-stat :cash +40))
            :no identity}))}
 
@@ -281,8 +287,7 @@
  :weight #(util/bucket (- (:turn %) (:turn-borrowed (:loan-info %)))
             [[25 1] [30 2] [35 4] [40 8] [45 16] [50 32] [1000 100]])
  :gen (fn [state]
-        (let [collector (gen/gen-character)
-              creditor  (:creditor (:loan-info state))
+        (let [{:keys [collector creditor]} (:loan-info state)
               pay-up
               {:type :info
                :speaker collector
@@ -298,7 +303,7 @@
               fight-outcome
               (let [fight-score (reduce + (map #(if (contains? (:traits %) :fighter) 2 1) (:crew state)))
                     enemy-fight-score (+ 2 (rand-int 4))
-                    fighter-if-any (first (filter #(contains? (:traits %) :fighter) (:crew state)))]
+                    fighter-if-any (crew-member-with-trait state :fighter)]
                 (cond
                   (> fight-score enemy-fight-score)
                     {:type :info
@@ -313,7 +318,7 @@
                      :text (str "Well then… looks like this is my cue to exit. When next we meet, "
                                 "please do try to be a bit more civil – otherwise I might have to do "
                                 "something we’ll both regret.")
-                     :ok #(update % :loan-info assoc :collection-failed? true :collector collector)}
+                     :ok #(assoc-in % [:loan-info :collection-failed?] true)}
                   (< fight-score enemy-fight-score)
                     {:type :game-over
                      :deadly? true
@@ -339,13 +344,81 @@
           {:type :yes-no
            :speaker collector
            :text (str "Hello, Captain. Remember that money you borrowed from "
-                      (:name creditor) "? Well, I’ve been sent to collect it! "
+                      (:name creditor)
+                      (rand-nth ["" (str " back on " (:home creditor))])
+                      "? Well, I’ve been sent to collect it! "
                       "Can we all agree to do this the easy way?")
            :yes #(if (has-at-least? % :cash 50)
                    (-> % (adjust-stat :cash -50)
                          (assoc :next-card pay-up))
                    (assoc % :next-card cant-afford))
-           :no  #(assoc % :next-card fight)}))}
+           :no #(assoc % :next-card fight)}))}
+
+{:id :info-crew-home
+ :prereq (fn [state]
+           (and (some #(= (:home %) (:location state)) (:crew state))
+                (not (contains? (:recent-picks state) :offer-join-crew))))
+ :weight (constantly 4)
+ :gen (fn [state]
+        {:type :info
+         :speaker (rand-nth (filter #(= (:home %) (:location state)) (:crew state)))
+         :text (str "Y’know, Cap’n, I never thought I’d say this, but it’s actually "
+                    "kind of nice to " (rand-nth ["see" "visit"]) " "
+                    (rand-nth ["home" "my home planet" "my old home planet"])
+                    " again. Especially since this time, I know I can leave whenever I want!")
+         :ok (adjust-stat :crew +10)})}
+
+{:id :request-gambling
+ :prereq (every-pred (has-at-least? :cash 5) (has-at-least? :crew 20))
+ :weight (constantly 1)
+ :gen (fn [state]
+        (let [speaker (rand-nth (:crew state))
+              dealer  (rand-nth (:merchants (current-place state)))
+              did-well
+              (str "Ooh, that’s not bad at all! You, my friend, might just be in for an exceptionally good night. "
+                   "Alright then, let’s have another go!")
+              broke-even
+              "How inconclusive! That’s simply no fun at all – best have another go!"
+              did-poorly
+              "Ooh, that’s too bad! Never mind that, though – I’m sure your luck will turn around before long!"
+              cant-afford
+              "Oh, what a pity – seems you can’t afford to play any more. Do be sure to return when you can!"]
+          (letfn [(walk-away [attempts]
+                    {:type :info
+                     :speaker dealer
+                     :text "Walking away already? Well, I certainly hope you enjoyed yourself!"
+                     :ok (adjust-stat :crew (min (* 3 attempts) 15))})
+                  (roll-the-dice [attempts]
+                    {:type :info
+                     :speaker speaker
+                     :text "C’mon, Cap’n – let’s see how we do!"
+                     :icon "🎲"
+                     :ok (fn [state]
+                           (let [outcome (rand-nth [0  0  0  0  0  0  0
+                                                    5  5  5  5  5  5  5
+                                                    10 15 20])]
+                             (-> state
+                                 (adjust-stat :cash outcome)
+                                 (assoc :next-card
+                                   (if (< (+ (:cash (:stats state)) outcome) 5)
+                                     (assoc (walk-away attempts) :text cant-afford)
+                                     (assoc (make-wager attempts) :text
+                                       (cond (< outcome 5) did-poorly
+                                             (= outcome 5) broke-even
+                                             (> outcome 5) did-well)))))))})
+                  (make-wager [attempts]
+                    {:type :yes-no
+                     :speaker dealer
+                     :text "Are you feeling lucky? C’mon, then, step right on up to the table and place your bets."
+                     :yes #(-> % (adjust-stat :cash -5)
+                                 (assoc :next-card (roll-the-dice (inc attempts))))
+                     :no #(assoc % :next-card (walk-away attempts))})]
+            {:type :yes-no
+             :speaker speaker
+             :text (str "Hey, Cap’n – as long as we’re in port, I’m gonna go try my "
+                        (rand-nth ["hand" "luck"]) " at some gambling. Wanna come along?")
+             :yes #(assoc % :next-card (make-wager 0))
+             :no identity})))}
 
 {:id :request-bonus
  :prereq (has-at-least? :cash 40)
@@ -396,13 +469,13 @@
 {:id :request-depart
  :repeatable? true
  :prereq #(>= (count (:cargo %)) 2)
- :weight #(+ (util/bucket (count (:cargo %)) [[2 1] [3 2] [4 4]])
+ :weight #(+ (util/bucket (count (:cargo %)) [[2 1] [3 2] [4 4] [5 6] [6 8]])
              (util/bucket (count (:recent-picks %)) [[5 1] [7 2] [100 3]]))
  :gen (fn [state]
         {:type :yes-no
          :speaker (rand-nth (:crew state))
-         :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings to be had round here "
-                                    "are pretty slim.")
+         :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
+                                    "to be had round here are pretty slim.")
                                "Say, Cap’n… we’ve been in port a while, haven’t we?"
                                "Sitting here in port is getting mighty boring, Cap’n."
                                "We’re all getting pretty restless, Cap’n."
@@ -514,10 +587,20 @@
                       (rand-nth ["crazy" "insane" "mad" "nuts"]) "!")
            :ok (adjust-stat :crew -10)}))}
 
+{:id :info-crew-lonely
+ :prereq #(and (= (count (:crew %)) 1) (= (count (passengers %)) 0))
+ :weight (constantly 2)
+ :gen (fn [state]
+        {:type :info
+         :speaker (first (:crew state))
+         :text (str "Kinda " (rand-nth ["lonely" "quiet"]) " around here, isn’t it, Cap’n? "
+                    "I’m starting to think maybe we should hire on another crew member just for the company.")
+         :ok (adjust-stat :crew -2)})}
+
 {:id :info-too-many-passengers
- :prereq #(> (count (passengers %)) (count (:crew %)))
+ :prereq #(>= (count (passengers %)) (count (:crew %)))
  :weight #(util/bucket (- (count (passengers %)) (count (:crew %)))
-            [[1 1] [2 2] [3 4] [4 8] [5 16]])
+            [[0 1] [1 2] [2 4] [3 8] [4 16] [5 32]])
  :gen (fn [state]
         {:type :info
          :speaker (rand-nth (:crew state))
