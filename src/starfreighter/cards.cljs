@@ -11,14 +11,23 @@
 "antimatter" "carbon dioxide" "dark matter" "fertilizer" "grain" "oxygen" "spice"
 ])
 
+(defn passengers [state]
+  (filter :passenger? (:cargo state)))
+
 (defn rand-destination [state]
   (rand-nth (filter #(not= % (:location state)) places)))
 
-(defn can-hold-more-cargo? [state]
-  (< (count (:cargo state)) (:max-cargo state)))
+(defn open-cargo-slots [state]
+  (- (:max-cargo state) (count (:cargo state))))
 
-(defn can-hold-more-crew? [state]
-  (< (count (:crew state)) (:max-crew state)))
+(defn open-crew-slots [state]
+  (- (:max-crew state) (count (:crew state))))
+
+(def can-hold-more-cargo?
+  (comp pos? open-cargo-slots))
+
+(def can-hold-more-crew?
+  (comp pos? open-crew-slots))
 
 (defn has-at-least?
   ([stat amount] #(has-at-least? % stat amount))
@@ -34,12 +43,13 @@
         (:cargo state)))
 
 (defn has-passengers-to-drop? [state]
-  (some #(and (:passenger? %)
-              (= (:destination %) (:location state)))
-        (:cargo state)))
+  (some #(= (:destination %) (:location state)) (passengers state)))
+
+(defn freely-sellable? [cargo]
+  (not (or (:passenger? cargo) (:destination cargo))))
 
 (defn has-freely-sellable-cargo? [state]
-  (some #(not (or (:passenger? %) (:destination %))) (:cargo state)))
+  (some freely-sellable? (:cargo state)))
 
 (defn crew-member-with-trait
   ([trait] #(crew-member-with-trait % trait))
@@ -66,7 +76,7 @@
 {:id :job-deliver-cargo
  :repeatable? true
  :prereq can-hold-more-cargo?
- :weight (constantly 8)
+ :weight #(* 4 (open-cargo-slots %))
  :gen (fn [state]
         (let [stuff      (rand-nth goods)
               dest       (rand-destination state)
@@ -98,13 +108,23 @@
 {:id :offer-sell-cargo
  :repeatable? true
  :prereq (every-pred can-hold-more-cargo? (has-at-least? :cash 20))
- :weight (constantly 2)
+ :weight open-cargo-slots
  :gen (fn [state]
         (let [stuff (rand-nth goods)]
           {:type :yes-no
            :speaker (gen/gen-character)
-           :text (str "Looking for " stuff "? Have I got a great deal for you! I’ve got the cheapest "
-                      stuff " this side of " (rand-destination state) ".")
+           :text (str "Looking for " stuff "? "
+                      (rand-nth [(str (rand-nth ["Boy howdy, have" "Have"]) " I got a "
+                                      (rand-nth ["" "great "]) "deal for you")
+                                 "How fortunate you are"
+                                 "It’s your lucky day"
+                                 "Well, you’re in luck"
+                                 "Well, you’ve come to the right place"
+                                 (str "What incredible " (rand-nth ["fortune" "luck"]))])
+                      "! "
+                      (rand-nth [(str "I’ve got the cheapest " stuff " this side of " (rand-destination state))
+                                 (str "With prices like these, I’m practically giving this " stuff " away")])
+                      ".")
            :yes #(-> % (update :cargo conj {:name stuff :counterfeit? (rand-nth [true false false])})
                        (adjust-stat :cash -15))
            :no identity}))}
@@ -113,16 +133,22 @@
  :repeatable? true
  :prereq (every-pred has-freely-sellable-cargo?
                      #(not (contains? (:recent-picks %) :offer-sell-cargo)))
- :weight (constantly 2)
+ :weight #(* 2 (count (filter freely-sellable? (:cargo %))))
  :gen (fn [state]
-        (let [item    (rand-nth (remove #(or (:passenger? %) (:destination %)) (:cargo state)))
+        (let [item    (rand-nth (filter freely-sellable? (:cargo state)))
               stuff   (:name item)
               speaker (gen/gen-character)
               amount  (rand-nth [+20 +20 +30])]
           {:type :yes-no
            :speaker speaker
-           :text (str "Hello, Captain. I’m in the market to buy some " stuff ", and it looks like "
-                      "you’ve got some for sale. Want to make a deal?")
+           :text (str (rand-nth ["Greetings" "Hello"])
+                      ", Captain. I’m " (rand-nth ["in the market" "looking"])
+                      " to buy some " stuff ", and it looks like you’ve got some for sale. "
+                      (rand-nth ["Care to make"
+                                 "Could I interest you in"
+                                 "Want to make"
+                                 "Would you like to make"])
+                      " a deal?")
            :yes #(-> % (adjust-stat :cash amount)
                        ;; TODO will cheat people out of duplicates if they have any
                        (update :cargo (comp vec (partial remove #{item})))
@@ -133,8 +159,12 @@
                             :text (str (rand-nth ["Hey…"
                                                   "Hey, hold on a second…"
                                                   "Hey, wait a minute…"])
-                                       " what’re you trying to pull? This " stuff " is counterfeit! "
-                                       "Ain’t even worth a quarter credit!")
+                                       " "
+                                       (rand-nth ["are you trying to pull one over on me"
+                                                  "just who do you think you’re fooling"
+                                                  "what’re you trying to pull"
+                                                  "who do you think you’re fooling"])
+                                       "? This " stuff " is counterfeit! I demand a refund!")
                             :ok (adjust-stat :cash (- amount))})))}))}
 
 {:id :job-deliver-passenger
@@ -154,12 +184,13 @@
 {:id :offer-join-crew
  :repeatable? true
  :prereq (every-pred can-hold-more-crew? (has-at-least? :cash 30))
- :weight (constantly 1)
+ :weight open-crew-slots
  :gen (fn [_]
         (let [char (gen/gen-character)]
           {:type :yes-no
            :speaker char
-           :text (str (rand-nth ["I’m looking for work, Captain. "
+           :text (str (rand-nth ["Excuse me, Captain. "
+                                 "I’m looking for work, Captain. "
                                  "You’re a spacer, right? "
                                  ""])
                       (rand-nth ["Any chance you’d have"
@@ -167,10 +198,13 @@
                                  "Do you think there might be"
                                  "Have you got"
                                  "Is there by any chance"
-                                 "Might there be"])
+                                 "Might there be"
+                                 "Might you have"])
                       " "
-                      (rand-nth ["a place" "room"])
-                      " for someone like me in your crew? "
+                      (rand-nth ["a place" "a use" "room"])
+                      " for "
+                      (rand-nth ["" "someone like "])
+                      "me in your crew? "
                       (cond
                         (contains? (:traits char) :fighter)
                           (str "I’m not much of a deep thinker, but I can hold my own in a "
@@ -182,9 +216,21 @@
                         (contains? (:traits char) :medic)
                           (str "I don’t have any formal medical training, but "
                                (rand-nth ["I know" "I’ve picked up"]) " enough to patch people up "
-                               "and keep them going after a close scrape.")))
+                               "and keep them going after a close scrape.")
+                        :else
+                          (rand-nth [""
+                                     (str (rand-nth ["I don’t have any"
+                                                     "I don’t have much in the way of"
+                                                     "I haven’t got any"
+                                                     "I’ve got no"
+                                                     "I’ve not got much in the way of"])
+                                          " special skills"
+                                          (rand-nth [" or anything" " or anything like that" ""])
+                                          ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
+                                          " to learn.")])))
            :yes #(-> % (update :crew conj char)
-                       (adjust-stat :cash -30))
+                       (adjust-stat :cash -30)
+                       (adjust-stat :crew +5))
            :no identity}))}
 
 {:id :offer-upgrade-crew-quarters
@@ -218,9 +264,12 @@
         (let [creditor (gen/gen-character)]
           {:type :yes-no
            :speaker creditor
-           :text (str "So, I hear tell you’re strapped for cash. I could certainly lend you some… "
+           :text (str (rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
+                      " I hear tell you’re "
+                      (rand-nth ["running a bit short on" "strapped for"])
+                      " cash. I could certainly lend you some… "
                       "provided you agree to pay it back promptly, plus a bit of interest. "
-                      "What do you say?")
+                      (rand-nth ["Do we have a deal?" "What do you say?"]))
            :yes #(-> % (assoc :loan-info {:creditor creditor :turn-borrowed (:turn state)})
                        (adjust-stat :cash +40))
            :no identity}))}
@@ -465,22 +514,68 @@
                       (rand-nth ["crazy" "insane" "mad" "nuts"]) "!")
            :ok (adjust-stat :crew -10)}))}
 
+{:id :info-too-many-passengers
+ :prereq #(> (count (passengers %)) (count (:crew %)))
+ :weight #(util/bucket (- (count (passengers %)) (count (:crew %)))
+            [[1 1] [2 2] [3 4] [4 8] [5 16]])
+ :gen (fn [state]
+        {:type :info
+         :speaker (rand-nth (:crew state))
+         :text (str "There are too many passengers on board this boat! "
+                    ;; TODO variants replacing "they"/"them" with a specific passenger name?
+                    (rand-nth [(str "I can’t get any"
+                                    (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                                    (rand-nth ["" " with them around"])
+                                    " – they keep")
+                               (str "It’s impossible to get any"
+                                    (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                                    " with them"
+                                    (rand-nth ["" " always" " constantly"]))
+                               "They keep"
+                               (str "They’re " (rand-nth ["always" "constantly"]))])
+                    (rand-nth [" acting like tourists and"
+                               " eating all the food and"
+                               " hogging the bathroom and"
+                               " stumbling around the corridors and"
+                               ""])
+                    " getting underfoot. "
+                    (rand-nth [""
+                               (str "Can’t wait until we can let them off at " (:destination state) ".")
+                               "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
+                               (str "I’ll be so glad to see them go when we get to " (:destination state) ".")]))
+         :ok (adjust-stat :crew -10)})}
+
+{:id :offer-passenger-use-crew-bedspace
+ :prereq #(> (count (passengers %)) 1)
+ :weight (comp count passengers)
+ :gen (fn [state]
+        {:type :yes-no
+         :speaker (rand-nth (passengers state))
+         :text (str "Excuse me, Captain. The passenger quarters are kind of uncomfortable, "
+                    "and I haven’t been able to get a lot of sleep. Could I maybe swap quarters "
+                    "with one of the crew for the rest of the voyage? I’d be willing to "
+                    (rand-nth ["compensate you" "pay you a little extra"]) " for your trouble.")
+         :yes #(-> % (adjust-stat :crew -10)
+                     (adjust-stat :cash +5))
+         :no identity})}
+
 {:id :offer-passenger-join-crew
  :prereq (every-pred can-hold-more-crew?
                      #(some :passenger? (:cargo %))
                      (has-at-least? :crew 60)
                      (has-at-least? :cash 20))
- :weight #(+ (util/bucket (count (:crew %)) [[1 3] [2 2] [3 1] [6 0]])
+ :weight #(+ (open-crew-slots %)
              (util/bucket (:crew (:stats %)) [[75 1] [90 2] [100 3]]))
  :gen (fn [state]
-        (let [passenger (rand-nth (filter :passenger? (:cargo state)))]
+        (let [passenger (rand-nth (passengers state))]
           {:type :yes-no
            :speaker passenger
            :text (str "Seems like you could really use an extra pair of hands around here, Captain. "
                       "And I am looking for work… d’you think there might be a place for me in your crew?")
            :yes #(-> % (update :crew conj passenger)
                        (update :cargo (comp vec (partial remove #{passenger})))
-                       (adjust-stat :cash -20))
+                       (adjust-stat :cash -20)
+                       (adjust-stat :crew +5))
            :no identity}))}
 
 {:id :request-try-fix-engine

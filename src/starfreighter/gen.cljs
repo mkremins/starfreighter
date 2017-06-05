@@ -92,6 +92,7 @@
    "D" "Dee"
    "F" "Eff"
    "G" "Gee"
+   "I" "Eye"
    "J" "Jay"
    "K" "Kay"
    "L" "Ell"
