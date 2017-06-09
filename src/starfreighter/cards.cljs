@@ -302,7 +302,7 @@
                           "to " (:name creditor) ".")}
               fight-outcome
               (let [fight-score (reduce + (map #(if (contains? (:traits %) :fighter) 2 1) (:crew state)))
-                    enemy-fight-score (+ 2 (rand-int 4))
+                    enemy-fight-score (rand/rand-int* 2 5)
                     fighter-if-any (crew-member-with-trait state :fighter)]
                 (cond
                   (> fight-score enemy-fight-score)

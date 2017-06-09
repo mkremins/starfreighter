@@ -118,44 +118,38 @@
               (#{"mB" "mn" "mp" "nd" "ng" "nK"} (str c1 c2)) ; valid nasal+stop combo
               )))))
 
-(defn gen-init-syllable [con-chunks vowels]
-  (let [init-vowel? (< (rand) 0.33)]
+(defn gen-init-syllable [con-clusters vowels]
+  (let [init-vowel? (rand/chance 1 3)]
     (str (when init-vowel? (rand-nth vowels))
-         (rand-nth (cond->> con-chunks (not init-vowel?) (filter legal-at-start?)))
+         (rand-nth (cond->> con-clusters (not init-vowel?) (filter legal-at-start?)))
          (rand-nth vowels))))
 
-(defn gen-final-syllable [con-chunks vowels]
-  (str (rand-nth con-chunks)
+(defn gen-final-syllable [con-clusters vowels]
+  (str (rand-nth con-clusters)
        (rand-nth vowels)
-       (when (< (rand) 0.66) (rand-nth (filter legal-at-end? con-chunks)))))
+       (when (rand/chance 2 3) (rand-nth (filter legal-at-end? con-clusters)))))
 
 (defn gen-orthography [stops liqs sibs vows]
-  (let [phones (reduce into [] [stops liqs sibs vows])]
+  (let [phones (->> (reduce into [] [stops liqs sibs vows])
+                    (filter (partial contains? possible-expressions)))]
     (->> phones
          (map (fn [phone]
-                (if-let [possible (get possible-expressions phone)]
-                  (->> (shuffle possible)
-                       (take (rand-nth (if (> (count possible) 1) [1 1 2] [1])))
-                       (vec))
-                  [phone])))
+                (let [possible (possible-expressions phone)
+                      n (if (and (> (count possible) 1) (rand/chance 1 3)) 2 1)]
+                  (vec (rand/pick-n n possible)))))
          (zipmap phones))))
 
-(defn express [base-word orthography]
-  (->> base-word
-       (map (fn [c]
-              (if-let [possible (get orthography c)]
-                (rand-nth possible)
-                c)))
-       (str/join)))
+(defn express [phones orthography]
+  (str/join (map #(or (some-> % orthography rand-nth) %) phones)))
 
 (defn gen-word [{:keys [inits finals orthography]}]
   (express (str (rand-nth inits) (rand-nth finals)) orthography))
 
 (defn gen-language []
-  (let [stops (rand/unique-runs (+ 4 (rand-int 5)) weighted-choice all-stops)
-        liqs  (distinct (repeatedly 4 #(weighted-choice all-liquids)))
-        sibs  (distinct (repeatedly 4 #(weighted-choice all-sibilants)))
-        vows  (rand/unique-runs (+ 5 (rand-int 4)) rand-nth all-vowels)
+  (let [stops (rand/unique-runs (rand/rand-int* 4 8) rand/weighted-choice all-stops)
+        liqs  (distinct (repeatedly 4 #(rand/weighted-choice all-liquids)))
+        sibs  (distinct (repeatedly 4 #(rand/weighted-choice all-sibilants)))
+        vows  (rand/unique-runs (rand/rand-int* 5 8) rand-nth all-vowels)
         ccs   (rand/unique-runs 12 gen-consonant-cluster stops liqs sibs)]
     {:inits  (rand/unique-runs 7 gen-init-syllable ccs vows)
      :finals (rand/unique-runs 7 gen-final-syllable ccs vows)

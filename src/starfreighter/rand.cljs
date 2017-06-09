@@ -15,6 +15,13 @@
         r (* r r)] ; square to bias towards the low end
     (nth pool (js/Math.floor (* r (count pool))))))
 
+(defn chance
+  "Randomly returns either true (with probability `n`) or false (with
+  probability `(- 1 n)`). If passed two arguments, will have an `m` in `n`
+  chance of returning true."
+  ([n] (< (rand) n))
+  ([m n] (< (rand) (/ m n))))
+
 (defn pick-n
   "Randomly selects `n` items from `pool`, without replacement."
   [n pool]
@@ -24,6 +31,13 @@
   "Randomly selects `n` items from `pool`, with replacement."
   [n pool]
   (repeatedly n #(rand-nth pool)))
+
+(defn rand-int*
+  "Like `clojure.core/rand-int`, but includes `n` in the range of possible
+  outputs. Can also be passed two arguments to get a random integer between
+  `lo` and `hi` (both inclusive)."
+  ([n] (rand-int* 0 n))
+  ([lo hi] (+ lo (rand-int (- (inc hi) lo)))))
 
 (defn restrict
   "Repeatedly runs `gen`, a generator fn, until the output passes `pred`, then

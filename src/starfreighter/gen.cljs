@@ -209,7 +209,7 @@
   (let [fname (rand-nth (conj (:common-first-names place) (rand-nth first-names)))
         lname (rand-nth (conj (:common-last-names place) (rand-nth last-names)))
         nick  (gen-nickname fname lname)
-        nick-only? (and nick (> (rand) (/ 3 4)))]
+        nick-only? (and nick (rand/chance 1 4))]
     {:name
      (->> [(when-not nick-only? fname) (when nick (str "“" nick "”")) lname]
           (filter identity)
