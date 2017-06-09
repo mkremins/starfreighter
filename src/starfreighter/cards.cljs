@@ -57,6 +57,8 @@
   ([state stat amount]
     (update-in state [:stats stat] #(-> % (+ amount) (min 100) (max 0)))))
 
+(declare starbound-deck)
+
 (defonce port-deck [
 {:id :offer-repair-ship
  :prereq (every-pred (has-at-most? :ship 70) (has-at-least? :cash 40))
@@ -420,6 +422,105 @@
              :yes #(assoc % :next-card (make-wager 0))
              :no identity})))}
 
+{:id :request-drinking
+ :prereq (every-pred (has-at-least? :cash 5) (has-at-least? :crew 20))
+ :weight (constantly 1)
+ :gen (fn [state]
+        (let [speaker (rand-nth (:crew state))
+              local   (gen/gen-character (current-place state))
+              unconscious?
+              #(contains? (:traits %) :unconscious)
+              your-side-active?
+              (fn [{:keys [crew]}]
+                (some (complement unconscious?) crew))
+              their-side-active?
+              (fn [{:keys [fight-info]}]
+                (some (complement unconscious?) (vals (:opponents fight-info))))
+              bar-fight-deck
+              [{:id :you-win
+                :prereq (every-pred your-side-active?
+                                    (complement their-side-active?))
+                :weight (constantly 1)
+                :gen (fn [state]
+                       (let [speaker (rand-nth (:crew state))]
+                         {:type :info
+                          :speaker speaker
+                          :text (str "That’ll teach you to mess with " (:name speaker) "!")
+                          :ok #(-> % (dissoc :fight-info)
+                                     (assoc :deck port-deck))}))}
+
+               {:id :they-win
+                :prereq (every-pred their-side-active?
+                                    (complement your-side-active?))
+                :weight (constantly 1)
+                :gen (fn [state]
+                       {:type :game-over
+                        :text (str "You died tragically in a bar fight on " (:location state) ". ")
+                        :deadly? true})}
+
+               {:id :hit-with-object
+                :repeatable? true
+                :prereq (every-pred your-side-active? their-side-active?)
+                :weight (constantly 1)
+                :gen (fn [{:keys [crew fight-info] :as state}]
+                       (let [hitter (rand-nth (remove unconscious? crew))
+                             target (rand-nth (remove unconscious? (vals (:opponents fight-info))))]
+                         {:type :info
+                          :text (str (:shortname hitter) " hits one of your assailants with a "
+                                     (rand-nth ["bottle" "chair" "pitcher" "table leg"])
+                                     ". "
+                                     "TODO somehow communicate that this knocked them out")
+                          :ok #(update-in % [:fight-info :opponents (:name target) :traits] conj :unconscious)
+                          :icon "💥"}))}
+
+               {:id :get-hit-with-object
+                :repeatable? true
+                :prereq (every-pred your-side-active? their-side-active?)
+                :weight (constantly 1)
+                :gen (fn [{:keys [crew fight-info] :as state}]
+                       (let [hitter (rand-nth (remove unconscious? (vals (:opponents fight-info))))
+                             target (rand-nth (remove unconscious? crew))]
+                         {:type :info
+                          :text (str "One of your assailants hits " (:shortname target) " with a "
+                                     (rand-nth ["bottle" "chair" "pitcher" "table leg"])
+                                     ". "
+                                     "TODO somehow communicate that this knocked them out")
+                          :ok
+                          (fn [state]
+                            (update state :crew
+                              (partial mapv #(cond-> % (= % target) (update :traits conj :unconscious)))))
+                          :icon "💥"}))}]
+              bar-fight
+              {:type :info
+               :text "TODO begin fight"
+               :ok (fn [state]
+                     (let [opponents (into [local] (repeatedly 2 #(gen/gen-character (current-place state))))]
+                       (assoc state :deck bar-fight-deck
+                                    :fight-info {:opponents (zipmap (map :name opponents) opponents)})))}
+              walk-away
+              {:type :info
+               :text "You walk away."
+               :ok identity}
+              confrontation
+              {:type :yes-no
+               :speaker local
+               :text (rand-nth [(str "Oi! We don’t take too kindly to spacers round these parts. "
+                                     "How’s about you shove off afore we start doin’ the shoving!")
+                                (str "Spacer, eh? Don’t see too many of your kind round these parts. "
+                                     "Reckon you oughta be on your way now.")])
+               :yes #(assoc % :next-card walk-away)
+               :no #(assoc % :next-card bar-fight)}
+              walk-to-bar
+              {:type :info
+               :text "You walk to the bar."
+               :ok #(assoc % :next-card confrontation)}]
+          {:type :yes-no
+           :speaker speaker
+           :text (str "Hey, Cap’n – have you even left the ship since we got into port? "
+                      "C’mon, come have a drink with us!")
+           :yes #(assoc % :next-card walk-to-bar)
+           :no identity}))}
+
 {:id :request-bonus
  :prereq (has-at-least? :cash 40)
  :weight #(+ (util/bucket (:cash (:stats %)) [[60 1] [80 2] [100 3]])
@@ -486,6 +587,7 @@
                     (rand-nth ["get a move on" "get going" "hit the road"])
                     (rand-nth ["" " already"]) "?")
          :yes #(assoc % :docked? false
+                        :deck starbound-deck
                         :destination (let [dests (filter identity (map :destination (:cargo %)))]
                                        (if (seq dests) (rand-nth dests) (rand-destination state)))
                         :recent-picks #{})
@@ -696,7 +798,10 @@
         {:type :info
          :speaker (rand-nth (:crew state))
          :text (str "Looks like we made it, Cap’n! Now approaching " (:destination state) ".")
-         :ok #(assoc % :docked? true :location (:destination %) :recent-picks #{})})}
+         :ok #(assoc % :docked? true
+                       :deck port-deck
+                       :location (:destination %)
+                       :recent-picks #{})})}
 ])
 
 (defn applicable-game-over-if-any [{:keys [stats] :as state}]
@@ -746,8 +851,7 @@
   (or (applicable-game-over-if-any state)
       (applicable-arrival-if-any state)
       (:next-card state)
-      (let [deck     (if (:docked? state) port-deck starbound-deck)
-            pickable (filter (partial can-pick? state) deck)
+      (let [pickable (filter (partial can-pick? state) (:deck state))
             weights  (zipmap pickable (map #((:weight %) state) pickable))
             metacard (rand/weighted-choice weights)]
         (assoc ((:gen metacard) state) :id (:id metacard)))))

@@ -16,6 +16,7 @@
                :max-crew 3
                :max-cargo 3
                :places places
+               :deck cards/port-deck
                :docked? true
                :location (:name place)
                :turn 0
