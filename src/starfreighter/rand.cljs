@@ -51,6 +51,12 @@
   (when-let [pool (seq pool)]
     (lazy-seq (concat (shuffle pool) (shuffle-cycle pool)))))
 
+(defn unique-runs
+  "Repeatedly runs `gen`, a generator fn, until exactly `n` unique outputs have
+  been generated. Extra `args`, if provided, are passed to `gen`."
+  [n gen & args]
+  (take n (distinct (repeatedly #(apply gen args)))))
+
 (defn weighted-pool
   "Returns a pool in which each key from the map `choices-with-weights` appears
   exactly N times, where N is the integer value associated with that key."
