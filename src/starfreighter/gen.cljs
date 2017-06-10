@@ -82,54 +82,53 @@
     (assoc place :merchants (vec (repeatedly 4 (partial gen-character place :merchant))))))
 
 (defn gen-places []
-  (let [;; 1. generate "cultures" (actually just languages for now)
-        langs  (repeatedly 5 lang/gen-language)
-        ;; 2. generate a bunch of places (5 for each "culture")
-        places (reduce into [] (repeatedly 5 #(map gen-place langs)))
-        names  (map :name places)
-        ;; 3. sort the places into "hubs" and "spokes"
-        hubs   (rand/pick-n 5 names)
-        spokes (remove (set hubs) names)
-        ;; 4. decide how many spokes each hub will have
-        spoke-counts (rand-nth [[3 3 4 5 5] [3 4 4 4 5] [2 4 4 5 5] [2 3 4 5 6]])
-        ;; 5. sort the places into "neighborhoods" of one hub and 2-5 spokes each
-        neighborhoods
-        (loop [neighborhoods {}
-               hubs-with-spoke-counts (zipmap hubs spoke-counts)
-               spokes spokes]
-          (if-let [[hub spoke-count] (first hubs-with-spoke-counts)]
-            (let [[spokes-to-use remaining-spokes] (split-at spoke-count spokes)]
-              (recur (assoc neighborhoods hub (set spokes-to-use))
-                     (rest hubs-with-spoke-counts)
-                     remaining-spokes))
-            neighborhoods))
-        ;; 6. in each neighborhood, randomly make a few internal connections between spokes
+  (let [;; 1. generate a group of 3-7 places for each of 5 generated languages
+        groups
+        (for [lang (repeatedly 5 lang/gen-language)
+              :let [group-size (rand/rand-int* 3 7)]]
+          (rand/unique-runs-by :name group-size gen-place lang))
+        name-groups
+        (map (partial map :name) groups)
+        ;; 2. within each group, connect the first place ("hub") to the others ("spokes")
         connections
-        (reduce (fn [connections [_ spokes]]
+        (reduce (fn [connections [hub & spokes]]
+                  (assoc connections hub (set spokes)))
+                {} name-groups)
+        ;; 3. within each group, randomly make a few internal connections between spokes
+        connections
+        (reduce (fn [connections [_ & spokes]]
                   (let [pairs (comb/combinations spokes 2)]
                     (->> pairs
-                         (rand/pick-n (max 1 (rand-int (count pairs))))
+                         (rand/pick-n (rand/rand-int* 1 (dec (count pairs))))
                          (map (fn [[a b]] {a #{b}}))
                          (apply merge-with set/union connections))))
-                neighborhoods neighborhoods)
-        ;; 7. make a single spoke-to-spoke connection from each neighborhood to the next
-        connections
-        (reduce (fn [connections [[_ spokes-a] [_ spokes-b]]]
-                  (let [spoke-a (rand-nth (vec spokes-a))
-                        spoke-b (rand-nth (vec spokes-b))]
-                    (update connections spoke-a (fnil conj #{}) spoke-b)))
-                connections
-                (partition 2 1 neighborhoods neighborhoods))
-        ;; 8. mirror all connections (so they'll work both ways)
+                connections name-groups)
+        ;; 4. make a single spoke-to-spoke connection from each group to the next
+        [connections borders]
+        (loop [connections connections
+               borders #{} ; remember which places already have an outgroup connection
+                           ; (so we don't accidentally use the same place twice)
+               group-pairs (partition 2 1 name-groups name-groups)]
+          (if-let [[[_ & spokes-a] [_ & spokes-b]] (first group-pairs)]
+            (let [spoke-a (rand-nth (remove borders spokes-a))
+                  spoke-b (rand-nth (remove borders spokes-b))]
+              (recur (update connections spoke-a (fnil conj #{}) spoke-b)
+                     (into borders [spoke-a spoke-b])
+                     (rest group-pairs)))
+            [connections borders]))
+        ;; 5. mirror all connections (so they'll work both ways)
         connections
         (reduce (fn [connections [origin destinations]]
                   (->> (for [dest destinations] {dest #{origin}})
                        (apply merge-with set/union connections)))
                 connections connections)]
-    (->> places
-         ;; 9. update each place with the set of other places it's connected to,
-         ;;    and whether or not it's considered a hub
-         (map #(assoc % :common-destinations (vec (get connections (:name %)))
-                        :hub? (contains? (set hubs) (:name %))))
-         ;; 10. return a "galaxy" mapping names to generated places
-         (zipmap names))))
+    (->> ;; 6. mark the first place in each group as a hub
+         (map (fn [[hub & spokes]] (conj spokes (assoc hub :hub? true))) groups)
+         ;; 7. flatten the list of groups of places into a flat list of places
+         (reduce into [])
+         ;; 8. update each place with the set of other places it's connected to,
+         ;;    and whether or not it's on the border between two groups
+         (map #(assoc % :connections (vec (get connections (:name %)))
+                        :border? (contains? borders (:name %))))
+         ;; 9. return a "galaxy" mapping names to generated places
+         (util/indexed-by :name))))

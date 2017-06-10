@@ -1,4 +1,5 @@
-(ns starfreighter.rand)
+(ns starfreighter.rand
+  (:require [starfreighter.util :as util]))
 
 (defn approx-normal-rand
   "Returns approximately normally distributed random numbers between 0 and 1.
@@ -70,6 +71,14 @@
   been generated. Extra `args`, if provided, are passed to `gen`."
   [n gen & args]
   (take n (distinct (repeatedly #(apply gen args)))))
+
+(defn unique-runs-by
+  "Like a combination of `unique-runs` and the `medley.core/distinct-by` fn
+  from [Medley](https://github.com/weavejester/medley). Repeatedly runs `gen`,
+  a generator fn, until exactly `n` unique outputs have been generated, using
+  `f` to determine uniqueness. Extra `args`, if provided, are passed to `gen`."
+  [f n gen & args]
+  (take n (util/distinct-by f (repeatedly #(apply gen args)))))
 
 (defn weighted-pool
   "Returns a pool in which each key from the map `choices-with-weights` appears

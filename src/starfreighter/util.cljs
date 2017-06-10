@@ -36,5 +36,10 @@
                   xs seen)))]
      (step coll #{}))))
 
+(defn indexed-by
+  "Returns a map from `(f item)` to `item` for every `item` in `coll`."
+  [f coll]
+  (zipmap (map f coll) coll))
+
 (defn sift [pred coll]
   [(filter pred coll) (remove pred coll)])

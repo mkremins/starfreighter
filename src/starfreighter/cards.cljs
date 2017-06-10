@@ -11,7 +11,7 @@
 
 (defn rand-destination [state]
   (rand-nth
-    (conj (:common-destinations (current-place state))
+    (conj (:connections (current-place state))
           (rand-nth (remove #{(:location state)} (keys (:places state)))))))
 
 (defn open-cargo-slots [state]

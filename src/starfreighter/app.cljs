@@ -5,6 +5,7 @@
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
             [starfreighter.gen :as gen]
+            [starfreighter.geom :as geom]
             [starfreighter.util :as util]))
 
 (defn restart-game [& _]
@@ -127,6 +128,72 @@
         (for [i (range (:max-cargo data))]
           (om/build cargo-slot (get (:cargo data) i)))))))
 
+(defcomponent galaxy-map [data owner]
+  (render [_]
+    (let [map-size    480
+          places      (:places data)
+          lang-names  (distinct (map (comp :name :language) (vals places)))
+          lang-colors (zipmap lang-names
+                              ["lightcoral" "gold" "darkseagreen" "cadetblue" "mediumpurple" "lightsalmon"])
+          core-ring
+          (loop [ring [(:name (first (filter :hub? (vals places))))]]
+            (let [prev (get places (last ring))
+                  in-core-ring?
+                  (fn [name]
+                    (let [place (get places name)]
+                      (or (:hub? place)
+                          (and (:border? place)
+                               (or (:hub? prev)
+                                   (not= (:name (:language place)) (:name (:language prev))))))))]
+              (if-let [next
+                       (->> (:connections prev)
+                            (remove (set ring))
+                            (filter in-core-ring?)
+                            (first))]
+                (recur (conj ring next))
+                ring)))
+          ring-angles  (zipmap core-ring (range 0 360 (/ 360 (count core-ring))))
+          place-points (zipmap core-ring
+                               (map #(geom/displace {:x (/ map-size 2) :y (/ map-size 2)}
+                                       (get ring-angles %) 140)
+                                    core-ring))
+          place-points
+          (apply merge place-points
+            (for [hub (filter (comp :hub? places) core-ring)
+                  :let [angle (get ring-angles hub)
+                        point (get place-points hub)
+                        non-ring-spokes (remove place-points (get-in places [hub :connections]))
+                        spoke-angles (rest (range (- angle 90) (+ angle 90) (/ 180 (inc (count non-ring-spokes)))))
+                        spoke-points (map #(geom/displace point % 70) spoke-angles)]]
+              (zipmap non-ring-spokes spoke-points)))
+          connections
+          (->> (for [{:keys [name connections]} (vals places)
+                     connection connections]
+                 (sort [name connection]))
+               (distinct)
+               (map (partial mapv place-points)))]
+      (dom/svg {:class "galaxy-map"
+                :xmlns "http://www.w3.org/2000/svg"
+                :width map-size
+                :height map-size
+                :viewBox (str "0 0 " map-size " " map-size)}
+        (dom/g {:class "connections"}
+          (for [[{x1 :x y1 :y} {x2 :x y2 :y}] connections]
+            (dom/line {:x1 x1 :y1 y1 :x2 x2 :y2 y2})))
+        (dom/g {:class "places"}
+          (for [place (vals places)
+                :let [{:keys [hub? name]} place
+                      {:keys [x y]} (get place-points name)
+                      color  (get lang-colors (:name (:language place)))
+                      radius (if hub? 16 10)]]
+            (dom/g {:class (cond-> "map-location" hub? (str " hub"))}
+              (dom/circle {:cx x :cy y :r radius :fill color})
+              (dom/text {:x x
+                         :y (- y (+ radius 4))
+                         :text-anchor "middle"
+                         :font-size 12}
+                name))))))))
+
 (defcomponent app [data owner]
   (render [_]
     (dom/div {:class "app"}
@@ -139,7 +206,8 @@
       (om/build stat-bars (:stats data))
       (dom/div {:class "lists"}
         (om/build crew-list data)
-        (om/build cargo-list data)))))
+        (om/build cargo-list data))
+      (om/build galaxy-map data))))
 
 (defn init! []
   (enable-console-print!)
