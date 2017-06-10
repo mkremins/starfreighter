@@ -90,7 +90,10 @@
           (let [traits (:traits data)
                 icons  {:fighter "👊"
                         :medic "💊"
-                        :mechanic "🔧"}]
+                        :mechanic "🔧"
+                        :unconscious "😵"
+                        :injured "🤕"
+                        :sick "🤒"}]
             (when (pos? (count traits))
               (str " " (str/join (map icons traits))))))
         " "))))

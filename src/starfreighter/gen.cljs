@@ -59,8 +59,8 @@
 
 (defn gen-character [place]
   (let [lang  (:language place)
-        fname (rand-nth (conj (:common-first-names place) (lang/gen-word lang :fname)))
-        lname (rand-nth (conj (:common-last-names place) (lang/gen-word lang :lname)))
+        fname (str/capitalize (lang/gen-word lang))
+        lname (str/capitalize (lang/gen-word lang))
         nick  (gen-nickname fname lname)
         nick-only? (and nick (rand/chance 1 4))]
     {:name
@@ -73,9 +73,7 @@
 
 (defn gen-place [lang]
   (let [exports (rand/pick-n 3 goods)
-        place {:name (lang/gen-word lang :pname)
-               :common-first-names (rand/unique-runs 8 lang/gen-word lang :fname)
-               :common-last-names (rand/unique-runs 5 lang/gen-word lang :lname)
+        place {:name (str/capitalize (lang/gen-word lang))
                :exports exports
                :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                :language lang}]

@@ -427,7 +427,8 @@
  :weight (constantly 1)
  :gen (fn [state]
         (let [speaker (rand-nth (:crew state))
-              local   (gen/gen-character (current-place state))
+              patron  (assoc (gen/gen-character (current-place state))
+                             :name "Rowdy Bar Patron")
               unconscious?
               #(contains? (:traits %) :unconscious)
               your-side-active?
@@ -438,24 +439,29 @@
                 (some (complement unconscious?) (vals (:opponents fight-info))))
               bar-fight-deck
               [{:id :you-win
-                :prereq (every-pred your-side-active?
-                                    (complement their-side-active?))
+                :prereq (every-pred your-side-active? (complement their-side-active?))
                 :weight (constantly 1)
                 :gen (fn [state]
-                       (let [speaker (rand-nth (:crew state))]
-                         {:type :info
-                          :speaker speaker
-                          :text (str "That’ll teach you to mess with " (:name speaker) "!")
-                          :ok #(-> % (dissoc :fight-info)
-                                     (assoc :deck port-deck))}))}
+                       {:type :info
+                        :speaker {:name (:last-hitter (:fight-info state))}
+                        :text (str "That’ll teach you to mess with " (:name speaker) "! "
+                                   "C’mon, Cap’n, let’s get outta here.")
+                        :ok #(-> % (dissoc :fight-info)
+                                   (assoc :deck port-deck)
+                                   (adjust-stat :crew +5)
+                                   (update :crew
+                                     (partial mapv
+                                       (fn [c]
+                                         (cond-> c (contains? (:traits c) :unconscious)
+                                           (-> (update :traits disj :unconscious)
+                                               (update :traits conj :injured)))))))})}
 
                {:id :they-win
-                :prereq (every-pred their-side-active?
-                                    (complement your-side-active?))
+                :prereq (every-pred their-side-active? (complement your-side-active?))
                 :weight (constantly 1)
                 :gen (fn [state]
                        {:type :game-over
-                        :text (str "You died tragically in a bar fight on " (:location state) ". ")
+                        :text (str "You die tragically in a bar fight on " (:location state) ". ")
                         :deadly? true})}
 
                {:id :hit-with-object
@@ -468,9 +474,10 @@
                          {:type :info
                           :text (str (:shortname hitter) " hits one of your assailants with a "
                                      (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                                     ". "
-                                     "TODO somehow communicate that this knocked them out")
-                          :ok #(update-in % [:fight-info :opponents (:name target) :traits] conj :unconscious)
+                                     ", knocking them to the ground. It doesn’t look like they’ll be "
+                                     "getting up any time soon.")
+                          :ok #(-> % (update-in [:fight-info :opponents (:name target) :traits] conj :unconscious)
+                                     (assoc-in [:fight-info :last-hitter] (:name hitter)))
                           :icon "💥"}))}
 
                {:id :get-hit-with-object
@@ -483,27 +490,28 @@
                          {:type :info
                           :text (str "One of your assailants hits " (:shortname target) " with a "
                                      (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                                     ". "
-                                     "TODO somehow communicate that this knocked them out")
-                          :ok
-                          (fn [state]
-                            (update state :crew
-                              (partial mapv #(cond-> % (= % target) (update :traits conj :unconscious)))))
+                                     ", knocking them to the ground. It doesn’t look like they’ll be "
+                                     "getting up any time soon.")
+                          :ok (fn [state]
+                                (update state :crew
+                                  (partial mapv #(cond-> % (= % target) (update :traits conj :unconscious)))))
                           :icon "💥"}))}]
               bar-fight
               {:type :info
-               :text "TODO begin fight"
+               :speaker patron
+               :text "Can’t take a hint, huh? Guess we’ll just have to teach you a lesson!"
                :ok (fn [state]
-                     (let [opponents (into [local] (repeatedly 2 #(gen/gen-character (current-place state))))]
+                     (let [opponents (into [patron] (repeatedly 2 #(gen/gen-character (current-place state))))]
                        (assoc state :deck bar-fight-deck
                                     :fight-info {:opponents (zipmap (map :name opponents) opponents)})))}
               walk-away
               {:type :info
-               :text "You walk away."
-               :ok identity}
+               :text (str "You gather your crew and walk out of the bar, determinedly ignoring "
+                          "the look of protest on " (:shortname speaker) "’s face.")
+               :ok (adjust-stat :crew -2)}
               confrontation
               {:type :yes-no
-               :speaker local
+               :speaker patron
                :text (rand-nth [(str "Oi! We don’t take too kindly to spacers round these parts. "
                                      "How’s about you shove off afore we start doin’ the shoving!")
                                 (str "Spacer, eh? Don’t see too many of your kind round these parts. "
@@ -511,9 +519,12 @@
                :yes #(assoc % :next-card walk-away)
                :no #(assoc % :next-card bar-fight)}
               walk-to-bar
-              {:type :info
-               :text "You walk to the bar."
-               :ok #(assoc % :next-card confrontation)}]
+              {:type :yes-no
+               :speaker {:name "Bartender"}
+               :text "So, what’ll it be? You havin’ anything?"
+               :yes #(-> % (adjust-stat :cash -5)
+                           (assoc :next-card confrontation))
+               :no #(assoc % :next-card confrontation)}]
           {:type :yes-no
            :speaker speaker
            :text (str "Hey, Cap’n – have you even left the ship since we got into port? "

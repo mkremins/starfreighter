@@ -142,16 +142,8 @@
 (defn express [phones orthography]
   (str/join (map #(or (some-> % orthography rand-nth) %) phones)))
 
-(defn gen-word
-  ([{:keys [inits finals orthography]}]
-    (express (str (rand-nth inits) (rand-nth finals)) orthography))
-  ([lang word-type]
-    (let [word-spec (get lang word-type)]
-      (-> lang
-          (cond-> (rand/chance 1 2) (assoc :inits (:inits word-spec))
-                  (rand/chance 1 2) (assoc :finals (:finals word-spec)))
-          (gen-word)
-          (str/capitalize)))))
+(defn gen-word [{:keys [inits finals orthography]}]
+  (express (str (rand-nth inits) (rand-nth finals)) orthography))
 
 (defn gen-language []
   (let [stops  (rand/unique-runs (rand/rand-int* 4 8) rand/weighted-choice all-stops)
@@ -159,13 +151,10 @@
         sibs   (distinct (repeatedly 4 #(rand/weighted-choice all-sibilants)))
         vows   (rand/unique-runs (rand/rand-int* 5 8) rand-nth all-vowels)
         ccs    (rand/unique-runs 12 gen-consonant-cluster stops liqs sibs)
-        inits  (rand/unique-runs 12 gen-init-syllable ccs vows)
-        finals (rand/unique-runs 12 gen-final-syllable ccs vows)
+        inits  (rand/unique-runs 9 gen-init-syllable ccs vows)
+        finals (rand/unique-runs 9 gen-final-syllable ccs vows)
         gen-namespec #(-> {:inits (rand/pick-n 4 inits) :finals (rand/pick-n 4 finals)})]
-    {:fname (gen-namespec)
-     :lname (gen-namespec)
-     :pname (gen-namespec)
-     :inits inits
+    {:inits inits
      :finals finals
      :orthography (gen-orthography stops liqs sibs vows)
      :consonant-clusters ccs
@@ -173,23 +162,3 @@
      :liquids liqs
      :sibilants sibs
      :vowels vows}))
-
-(defn test* []
-  (let [lang (gen-language)
-        test-word-type
-        (fn [wt]
-          (map str/capitalize (rand/unique-runs 20 #(gen-word lang wt))))
-        fnames (test-word-type :fname)
-        lnames (test-word-type :lname)
-        pnames (test-word-type :pname)
-        char-names (rand/unique-runs 20 #(str (rand-nth fnames) " " (rand-nth lnames)))]
-    (prn lang)
-    (println)
-    (prn fnames)
-    (println)
-    (prn lnames)
-    (println)
-    (prn pnames)
-    (println)
-    (prn char-names)
-    (println)))
