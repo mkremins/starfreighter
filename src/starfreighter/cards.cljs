@@ -61,15 +61,15 @@
 
 (defonce port-deck [
 {:id :offer-repair-ship
- :prereq (every-pred (has-at-most? :ship 70) (has-at-least? :cash 40))
+ :prereq (every-pred (has-at-most? :ship 70) (has-at-least? :cash 30))
  :weight #(util/bucket (:ship (:stats %)) [[20 16] [40 6] [100 4]])
  :gen (fn [state]
         {:type :yes-no
          :speaker (rand-nth (:merchants (current-place state)))
          :text (str "Looks like your ship’s in need of some repair – it’s practically falling apart! "
                     "Want me to help you out with that?")
-         :yes #(-> % (adjust-stat :cash -40)
-                     (adjust-stat :ship +30))
+         :yes #(-> % (adjust-stat :cash -30)
+                     (adjust-stat :ship +20))
          :no identity})}
 
 {:id :job-deliver-cargo
@@ -232,13 +232,13 @@
                                           (rand-nth [" or anything" " or anything like that" ""])
                                           ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
                                           " to learn.")])))
-           :yes #(-> % (update :crew conj char)
+           :yes #(-> % (update :crew conj (assoc char :role :crew))
                        (adjust-stat :cash -30)
                        (adjust-stat :crew +5))
            :no identity}))}
 
 {:id :offer-upgrade-crew-quarters
- :prereq (every-pred #(< (:max-crew %) 6) (has-at-least? :cash 60))
+ :prereq (every-pred #(< (:max-crew %) 6) (has-at-least? :cash 50))
  :weight #(if (can-hold-more-crew? %) 1 2)
  :gen (fn [state]
         {:type :yes-no
@@ -246,11 +246,11 @@
          :text (str "Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
                     "to give you a little more breathing room… for a fair price, of course.")
          :yes #(-> % (update :max-crew inc)
-                     (adjust-stat :cash -60))
+                     (adjust-stat :cash -50))
          :no identity})}
 
 {:id :offer-upgrade-cargo-hold
- :prereq (every-pred #(< (:max-cargo %) 6) (has-at-least? :cash 60))
+ :prereq (every-pred #(< (:max-cargo %) 6) (has-at-least? :cash 50))
  :weight #(if (can-hold-more-cargo? %) 1 2)
  :gen (fn [state]
         {:type :yes-no
@@ -258,7 +258,7 @@
          :text (str "You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
                     "How about I do you a favor and modify this bucket of bolts? For a price, of course.")
          :yes #(-> % (update :max-cargo inc)
-                     (adjust-stat :cash -60))
+                     (adjust-stat :cash -50))
          :no identity})}
 
 {:id :offer-loan
@@ -442,19 +442,20 @@
                 :prereq (every-pred your-side-active? (complement their-side-active?))
                 :weight (constantly 1)
                 :gen (fn [state]
-                       {:type :info
-                        :speaker {:name (:last-hitter (:fight-info state))}
-                        :text (str "That’ll teach you to mess with " (:name speaker) "! "
-                                   "C’mon, Cap’n, let’s get outta here.")
-                        :ok #(-> % (dissoc :fight-info)
-                                   (assoc :deck port-deck)
-                                   (adjust-stat :crew +5)
-                                   (update :crew
-                                     (partial mapv
-                                       (fn [c]
-                                         (cond-> c (contains? (:traits c) :unconscious)
-                                           (-> (update :traits disj :unconscious)
-                                               (update :traits conj :injured)))))))})}
+                       (let [last-hitter (:last-hitter (:fight-info state))]
+                         {:type :info
+                          :speaker last-hitter
+                          :text (str "That’ll teach you to mess with " (:name speaker) "! "
+                                     "C’mon, Cap’n, let’s get outta here.")
+                          :ok #(-> % (dissoc :fight-info)
+                                     (assoc :deck port-deck)
+                                     (adjust-stat :crew +5)
+                                     (update :crew
+                                       (partial mapv
+                                         (fn [c]
+                                           (cond-> c (contains? (:traits c) :unconscious)
+                                             (-> (update :traits disj :unconscious)
+                                                 (update :traits conj :injured)))))))}))}
 
                {:id :they-win
                 :prereq (every-pred their-side-active? (complement your-side-active?))
@@ -508,7 +509,7 @@
               {:type :info
                :text (str "You gather your crew and walk out of the bar, determinedly ignoring "
                           "the look of protest on " (:shortname speaker) "’s face.")
-               :ok (adjust-stat :crew -2)}
+               :ok (adjust-stat :crew -5)}
               confrontation
               {:type :yes-no
                :speaker patron
@@ -522,7 +523,7 @@
               {:type :yes-no
                :speaker {:name "Bartender"}
                :text "So, what’ll it be? You havin’ anything?"
-               :yes #(-> % (adjust-stat :cash -5)
+               :yes #(-> % (adjust-stat :cash -2)
                            (assoc :next-card confrontation))
                :no #(assoc % :next-card confrontation)}]
           {:type :yes-no
@@ -768,7 +769,7 @@
            :speaker passenger
            :text (str "Seems like you could really use an extra pair of hands around here, Captain. "
                       "And I am looking for work… d’you think there might be a place for me in your crew?")
-           :yes #(-> % (update :crew conj passenger)
+           :yes #(-> % (update :crew conj (assoc passenger :role :crew))
                        (update :cargo (comp vec (partial remove #{passenger})))
                        (adjust-stat :cash -20)
                        (adjust-stat :crew +5))

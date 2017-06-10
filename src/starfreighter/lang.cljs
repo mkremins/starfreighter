@@ -153,12 +153,12 @@
         ccs    (rand/unique-runs 12 gen-consonant-cluster stops liqs sibs)
         inits  (rand/unique-runs 9 gen-init-syllable ccs vows)
         finals (rand/unique-runs 9 gen-final-syllable ccs vows)
-        gen-namespec #(-> {:inits (rand/pick-n 4 inits) :finals (rand/pick-n 4 finals)})]
-    {:inits inits
-     :finals finals
-     :orthography (gen-orthography stops liqs sibs vows)
-     :consonant-clusters ccs
-     :stops stops
-     :liquids liqs
-     :sibilants sibs
-     :vowels vows}))
+        lang   {:inits inits
+                :finals finals
+                :orthography (gen-orthography stops liqs sibs vows)
+                :consonant-clusters ccs
+                :stops stops
+                :liquids liqs
+                :sibilants sibs
+                :vowels vows}]
+    (assoc lang :name (str/capitalize (gen-word lang)))))

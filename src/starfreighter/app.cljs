@@ -11,7 +11,7 @@
   (let [places (gen/gen-places)
         place (get places (rand-nth (keys places)))
         state {:stats {:cash 40 :ship 40 :crew 40}
-               :crew [(gen/gen-character place) (gen/gen-character place)]
+               :crew [(gen/gen-character place :crew) (gen/gen-character place :crew)]
                :cargo []
                :max-crew 3
                :max-cargo 3
@@ -41,8 +41,9 @@
 (defcomponent card-view [data owner]
   (render [_]
     (dom/div {:class "card"}
-      (dom/span {:class "speaker"}
-        (let [speaker (:speaker data)]
+      (let [speaker (:speaker data)
+            role (when-not (string? speaker) (some-> speaker :role name))]
+        (dom/span {:class (str "speaker " role)}
           (cond-> speaker (not (string? speaker)) :name)))
       " " (:text data)
       (when (= (:type data) :game-over)

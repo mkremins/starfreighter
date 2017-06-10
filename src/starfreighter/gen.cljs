@@ -57,19 +57,21 @@
      [.95 (rand-nth nicknames)]
      [ 1  (get single-letter-nicknames (first fname) (first fname))]]))
 
-(defn gen-character [place]
-  (let [lang  (:language place)
-        fname (str/capitalize (lang/gen-word lang))
-        lname (str/capitalize (lang/gen-word lang))
-        nick  (gen-nickname fname lname)
-        nick-only? (and nick (rand/chance 1 4))]
-    {:name
-     (->> [(when-not nick-only? fname) (when nick (str "“" nick "”")) lname]
-          (filter identity)
-          (str/join " "))
-     :shortname (or nick fname)
-     :traits    (rand-nth [#{} #{} #{} #{:fighter} #{:mechanic} #{:medic}])
-     :home      (:name place)}))
+(defn gen-character
+  ([place]
+    (let [lang (:language place)
+          [fname lname] (map str/capitalize (rand/unique-runs 2 lang/gen-word lang))
+          nick (gen-nickname fname lname)
+          nick-only? (and nick (rand/chance 1 4))]
+      {:name
+       (->> [(when-not nick-only? fname) (when nick (str "“" nick "”")) lname]
+            (filter identity)
+            (str/join " "))
+       :shortname (or nick fname)
+       :traits    (rand-nth [#{} #{} #{} #{:fighter} #{:mechanic} #{:medic}])
+       :home      (:name place)}))
+  ([place role]
+    (assoc (gen-character place) :role role)))
 
 (defn gen-place [lang]
   (let [exports (rand/pick-n 3 goods)
@@ -77,7 +79,7 @@
                :exports exports
                :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                :language lang}]
-    (assoc place :merchants (vec (repeatedly 4 (partial gen-character place))))))
+    (assoc place :merchants (vec (repeatedly 4 (partial gen-character place :merchant))))))
 
 (defn gen-places []
   (let [;; 1. generate "cultures" (actually just languages for now)
