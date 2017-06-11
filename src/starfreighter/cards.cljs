@@ -27,17 +27,19 @@
           (recur (conj tiers this-tier)
                  (into visited this-tier)))))))
 
-(defn pathfind [state from to]
-  (let [from  (cond-> from (map? from) (:name from))
-        to    (cond-> to (map? to) (:name to))]
-    (if (= from to)
-      [from]
-      (loop [paths [[from]]
-             visited #{from}]
-        (let [adjacencies* #(remove visited (adjacencies state %))
-              paths' (mapcat #(map (partial conj %) (adjacencies* (peek %))) paths)]
-          (or (first (filter #(= (peek %) to) paths'))
-              (recur paths' (into visited (map peek paths')))))))))
+(defn pathfind
+  ([state to] (pathfind state (:location state) to))
+  ([state from to]
+    (let [from  (cond-> from (map? from) (:name from))
+          to    (cond-> to (map? to) (:name to))]
+      (if (= from to)
+        [from]
+        (loop [paths [[from]]
+               visited #{from}]
+          (let [adjacencies* #(remove visited (adjacencies state %))
+                paths' (mapcat #(map (partial conj %) (adjacencies* (peek %))) paths)]
+            (or (first (filter #(= (peek %) to) paths'))
+                (recur paths' (into visited (map peek paths'))))))))))
 
 (defn rand-destination [state]
   (rand-nth
@@ -49,7 +51,7 @@
         cargo-dests (map :destination (:cargo state))]
     (if (empty? cargo-dests)
       (rand-nth (:connections place))
-      (->> (map (partial pathfind state place) cargo-dests)
+      (->> (map (partial pathfind state) cargo-dests)
            (sort-by count <)
            (first)
            (second)))))
@@ -857,6 +859,22 @@
                        :location (:destination %)
                        :recent-picks #{})})}
 ])
+
+(defn prepare-to-depart [state]
+  (let [dest (:info-target state)
+        path (pathfind state dest)]
+    (assoc state
+      :prevent-travel? true
+      :card {:type :yes-no
+             :speaker (rand-nth (:crew state))
+             :text (str "Oh wow, leaving for " (:name dest) " already? "
+                        "Guess I’ll go fire up the engine!")
+             :yes #(-> % (assoc :docked? false
+                                :deck starbound-deck
+                                :destination (first (rest path))
+                                :recent-picks #{})
+                         (dissoc :prevent-travel?))
+             :no #(dissoc % :prevent-travel?)})))
 
 (defn applicable-game-over-if-any [{:keys [stats] :as state}]
   (cond

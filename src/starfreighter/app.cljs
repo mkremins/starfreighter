@@ -179,8 +179,8 @@
          :width map-size :height map-size
          :viewBox (str "0 0 " map-size " " map-size)
          :on-click (partial set-target! nil)}
-        ;; first we draw all the connections...
-        (let [target-path (some->> target-place (cards/pathfind data location) set)
+        ;; draw connections
+        (let [target-path (some->> target-place (cards/pathfind data) set)
               travel-ends [location destination]
               connections (->> (vals places)
                                (mapcat (fn [{:keys [name connections]}]
@@ -195,7 +195,7 @@
               (dom/line
                 {:class (cond here? "here" target? "target")
                  :x1 (:x p1) :y1 (:y p1) :x2 (:x p2) :y2 (:y p2)}))))
-        ;; ...and then we draw all the places
+        ;; draw places
         (let [lang-names  (distinct (map (comp :name :language) (vals places)))
               lang-colors (zipmap lang-names map-colors)
               job-dests   (set (map :destination (:cargo data)))]
@@ -218,7 +218,16 @@
                    :on-click (partial set-target! place)}
                   (dom/tspan {:font-size 16}
                     (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
-                  (dom/tspan name))))))))))
+                  (dom/tspan name))))))
+        ;; draw button to depart for target (if any)
+        (when (and docked? target-place
+                   (not= (:name target-place) location)
+                   (not (:prevent-travel? data)))
+          (dom/text {:class "depart-button"
+                     :x 468 :y 462 :text-anchor "end" :font-size 18
+                     :on-click #(do (.stopPropagation %)
+                                    (om/transact! data cards/prepare-to-depart))}
+            (str "➡️ " (:name target-place))))))))
 
 (defn comma-list [items]
   (cond
@@ -229,17 +238,20 @@
 
 (defcomponent info-box [data owner]
   (render [_]
-    (when-let [target (:info-target data)]
+    (when-let [target (or (:info-target data)
+                          (and (:docked? data) (cards/current-place data)))]
       (case (:type target)
         :place
-          (dom/div {:class "info-box place"}
-            (dom/strong (:name target)) " is an inhabited "
-            (rand-nth ["planetary " "solar " "star " ""]) "system. "
-            "The dominant culture there is " (:name (:language target)) ". "
-            (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
-            "xports include " (comma-list (map name (:exports target))) ". "
-            (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
-            "mports include " (comma-list (map name (:imports target))) ".")))))
+          (let [here? (and (:docked? data) (= (:name target) (:location data)))]
+            (dom/div {:class "info-box place"}
+              (dom/strong (:name target)) " is an inhabited "
+              (rand-nth ["planetary " "solar " "star " ""]) "system. "
+              "The dominant culture " (if here? "here" "there")
+              " is " (:name (:language target)) ". "
+              (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
+              "xports include " (comma-list (map name (:exports target))) ". "
+              (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
+              "mports include " (comma-list (map name (:imports target))) "."))))))
 
 (defcomponent app [data owner]
   (render [_]
