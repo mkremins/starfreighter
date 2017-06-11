@@ -51,6 +51,21 @@
    "Y" "Why"
    "Z" "Zee"})
 
+(defn gen-description [thing]
+  (case (:type thing)
+    :char
+      [[[:subject (:name thing)] " is a person from " [:link [:places (:home thing)]] ". "
+        "They belong to the " (:culture thing) " culture. "
+        (case (:role thing)
+          :crew
+            "They are a member of our crew."
+          :merchant
+            "They are a merchant."
+          ;else
+            "")]]
+    ;else
+      (:desc thing)))
+
 (defn gen-nickname [fname lname]
   (util/bucket (rand)
     [[.9  nil]
@@ -63,24 +78,48 @@
           [fname lname] (map str/capitalize (rand/unique-runs 2 lang/gen-word lang))
           nick (gen-nickname fname lname)
           nick-only? (and nick (rand/chance 1 4))]
-      {:name
+      {:type :char
+       :name
        (->> [(when-not nick-only? fname) (when nick (str "“" nick "”")) lname]
             (filter identity)
             (str/join " "))
        :shortname (or nick fname)
        :traits    (rand-nth [#{} #{} #{} #{:fighter} #{:mechanic} #{:medic}])
-       :home      (:name place)}))
+       :home      (:name place)
+       :culture   (:name lang)}))
   ([place role]
     (assoc (gen-character place) :role role)))
 
+(defn comma-list [items]
+  (cond
+    (empty? items) ""
+    (= (count items) 1) (first items)
+    (= (count items) 2) [(first items) " and " (second items)]
+    :else (into (vec (interpose ", " (butlast items))) [", and " (last items)])))
+
+(defn gen-place-desc [place]
+  (let [are #(rand-nth ["are " "include "])]
+    [[[:subject (:name place)] " is an inhabited "
+      (rand-nth ["planetary " "solar " "star " ""]) "system. "
+      "The " (rand-nth ["dominant" "majority"]) " culture is "
+      (:name (:language place)) ". "
+      (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
+      "xports " (are) (comma-list (map name (:exports place))) ". "
+      (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
+      "mports " (are) (comma-list (map name (:imports place))) "."]
+     ["Our merchant contacts here " (are)
+      (comma-list (map #(-> [:link %]) (:merchants place))) "."]]))
+
 (defn gen-place [lang]
-  (let [exports (rand/pick-n 3 goods)
-        place {:type :place
-               :name (str/capitalize (lang/gen-word lang))
-               :exports exports
-               :imports (set (rand/pick-n 2 (remove (set exports) goods)))
-               :language lang}]
-    (assoc place :merchants (vec (repeatedly 4 (partial gen-character place :merchant))))))
+  (let [exports   (rand/pick-n 3 goods)
+        place     {:type :place
+                   :name (str/capitalize (lang/gen-word lang))
+                   :exports exports
+                   :imports (set (rand/pick-n 2 (remove (set exports) goods)))
+                   :language lang}
+        merchants (vec (repeatedly 4 (partial gen-character place :merchant)))
+        place     (assoc place :merchants merchants)]
+    (assoc place :desc (gen-place-desc place))))
 
 (defn gen-places []
   (let [;; 1. generate a group of 3-7 places for each of 5 generated languages

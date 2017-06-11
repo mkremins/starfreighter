@@ -46,7 +46,9 @@
     (dom/div {:class "card"}
       (let [speaker (:speaker data)
             role (when-not (string? speaker) (some-> speaker :role name))]
-        (dom/span {:class (str "speaker " role)}
+        (dom/span {:class (str "speaker " role)
+                   :on-click (when role
+                               #(om/update! (om/root-cursor app-state) :info-target speaker))}
           (cond-> speaker (not (string? speaker)) :name)))
       " " (:text data)
       (when (= (:type data) :game-over)
@@ -218,9 +220,13 @@
                   {:x x :y (- y (+ radius 4))
                    :text-anchor "middle" :font-size 12
                    :on-click (partial set-target! place)}
-                  (dom/tspan {:font-size 16}
-                    (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
+                  (dom/tspan (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
                   (dom/tspan name))))))
+        ;; draw indicator of current location/travel
+        (dom/text {:class "whereami"
+                   :x (cond-> 12 docked? (- 4)) :y 462
+                   :text-anchor "start" :font-size 18}
+          (if docked? (str "📍 " location) (str "➡️ " destination)))
         ;; draw button to depart for target (if any)
         (when (and docked? target-place
                    (not= (:name target-place) location)
@@ -231,38 +237,35 @@
                                     (om/transact! data cards/prepare-to-depart))}
             (str "➡️ " (:name target-place))))))))
 
-(defn comma-list [items]
-  (cond
-    (empty? items) ""
-    (= (count items) 1) (first items)
-    (= (count items) 2) (str (first items) " and " (second items))
-    :else (str (str/join ", " (butlast items)) ", and " (last items))))
+(defcomponent info-span [data owner]
+  (render [_]
+    (if (sequential? data)
+      (case (first data)
+        :subject
+          (dom/strong (om/build-all info-span (rest data)))
+        :link
+          (let [linked (second data)
+                linked (cond->> linked (sequential? linked) (get-in @app-state))]
+            (prn linked)
+            (dom/a {:on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
+              (:name linked)))
+        ;else
+          (dom/span (om/build-all info-span data)))
+      (dom/span data))))
 
 (defcomponent info-box [data owner]
   (render [_]
     (when-let [target (or (:info-target data)
-                          (and (:docked? data) (db/current-place data)))]
-      (case (:type target)
-        :place
-          (let [here? (and (:docked? data) (= (:name target) (:location data)))]
-            (dom/div {:class "info-box place"}
-              (dom/strong (:name target)) " is an inhabited "
-              (rand-nth ["planetary " "solar " "star " ""]) "system. "
-              "The dominant culture " (if here? "here" "there")
-              " is " (:name (:language target)) ". "
-              (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
-              "xports include " (comma-list (map name (:exports target))) ". "
-              (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
-              "mports include " (comma-list (map name (:imports target))) "."))))))
+                          (and (:docked? data) (db/current-place data))
+                          (get-in data [:places (:destination data)]))]
+      (dom/div {:class "info-box"}
+        (for [paragraph (gen/gen-description target)]
+          (dom/p (om/build-all info-span paragraph)))))))
 
 (defcomponent app [data owner]
   (render [_]
     (dom/div {:class "app"}
       (dom/div {:class "left"}
-        (dom/div {:class "location"}
-          (if (:docked? data)
-            (:location data)
-            (str "En route to: " (:destination data))))
         (om/build card-view (:card data))
         (om/build choice-buttons data)
         (om/build stat-bars (:stats data))
