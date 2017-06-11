@@ -4,9 +4,12 @@
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
+            [starfreighter.db :as db]
             [starfreighter.gen :as gen]
             [starfreighter.geom :as geom]
             [starfreighter.util :as util]))
+
+(enable-console-print!)
 
 (defn restart-game [& _]
   (let [places (gen/gen-places)
@@ -17,7 +20,6 @@
                :max-crew 3
                :max-cargo 3
                :places places
-               :deck cards/port-deck
                :docked? true
                :location (:name place)
                :turn 0
@@ -180,7 +182,7 @@
          :viewBox (str "0 0 " map-size " " map-size)
          :on-click (partial set-target! nil)}
         ;; draw connections
-        (let [target-path (some->> target-place (cards/pathfind data) set)
+        (let [target-path (some->> target-place (db/pathfind data) set)
               travel-ends [location destination]
               connections (->> (vals places)
                                (mapcat (fn [{:keys [name connections]}]
@@ -239,7 +241,7 @@
 (defcomponent info-box [data owner]
   (render [_]
     (when-let [target (or (:info-target data)
-                          (and (:docked? data) (cards/current-place data)))]
+                          (and (:docked? data) (db/current-place data)))]
       (case (:type target)
         :place
           (let [here? (and (:docked? data) (= (:name target) (:location data)))]
@@ -272,7 +274,6 @@
         (om/build info-box data)))))
 
 (defn init! []
-  (enable-console-print!)
   (om/root app app-state {:target (js/document.getElementById "app")}))
 
 (init!)
