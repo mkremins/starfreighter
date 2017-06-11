@@ -15,10 +15,19 @@
     color: #eee;
   }
   body {
-    padding: 2rem;
+    margin: 0 auto;
+    padding: 40px;
+    width: 1240px;
   }
   .app {
+    display: flex;
+  }
+  .left {
+    margin-right: 40px;
     width: 640px;
+  }
+  .right {
+    width: 480px;
   }
   /* location */
   .location {
@@ -149,17 +158,33 @@
   /* galaxy map */
   .galaxy-map {
     background: #333;
-    left: 720px;
-    position: absolute;
-    top: 2rem;
+    margin-bottom: 1rem;
   }
   .galaxy-map line {
     stroke: #555;
     stroke-width: 1;
   }
+  .galaxy-map circle {
+    cursor: pointer;
+  }
   .galaxy-map text {
+    cursor: pointer;
     fill: #eee;
   }
+  /* galaxy map target indicators */
+  .galaxy-map .target circle {
+    stroke: cyan;
+    stroke-dasharray: 1,1;
+    stroke-width: 2;
+  }
+  .galaxy-map .target text {
+    fill: cyan;
+  }
+  .galaxy-map line.target {
+    stroke: cyan;
+    stroke-dasharray: 1,1;
+  }
+  /* galaxy map current position indicators */
   .galaxy-map .here circle {
     stroke: limegreen;
     stroke-dasharray: 1,1;
@@ -167,6 +192,21 @@
   }
   .galaxy-map .here text {
     fill: limegreen;
+  }
+  .galaxy-map line.here {
+    animation: 100s linear infinite travel-indicator;
+    stroke: limegreen;
+    stroke-dasharray: 1,1;
+    stroke-width: 2;
+  }
+  @keyframes travel-indicator {
+    from { stroke-dashoffset: 100%; }
+    to { stroke-dashoffset: 0%; }
+  }
+  /* infobox */
+  .info-box {
+    background: #333;
+    padding: 1rem;
   }
   </style>
 </head>

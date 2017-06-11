@@ -75,7 +75,8 @@
 
 (defn gen-place [lang]
   (let [exports (rand/pick-n 3 goods)
-        place {:name (str/capitalize (lang/gen-word lang))
+        place {:type :place
+               :name (str/capitalize (lang/gen-word lang))
                :exports exports
                :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                :language lang}]

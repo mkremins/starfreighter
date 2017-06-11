@@ -128,88 +128,136 @@
         (for [i (range (:max-cargo data))]
           (om/build cargo-slot (get (:cargo data) i)))))))
 
+;;; map rendering stuff
+
+(def ^:private map-colors ["lightcoral" "gold" "darkseagreen" "cadetblue" "mediumpurple" "lightsalmon"])
+(def ^:private map-size 480)
+
+(defn- build-core-ring [places]
+  (loop [ring [(:name (first (filter :hub? (vals places))))]]
+    (let [prev (get places (peek ring))
+          belongs-in-ring?
+          (fn [place]
+            (or (:hub? place)
+                (and (:border? place)
+                     (or (:hub? prev)
+                         (not= (:name (:language place)) (:name (:language prev)))))))]
+      (if-let [next
+               (->> (:connections prev)
+                    (remove (set ring))
+                    (map places)
+                    (filter belongs-in-ring?)
+                    (first))]
+        (recur (conj ring (:name next)))
+        ring))))
+
+(defn- layout-places [places]
+  (let [core-ring    (build-core-ring places)
+        ring-angles  (zipmap core-ring (range 0 360 (/ 360 (count core-ring))))
+        map-center   {:x (/ map-size 2) :y (/ map-size 2)}
+        place-points (zipmap core-ring (map #(geom/displace map-center (ring-angles %) 140) core-ring))]
+    (apply merge place-points
+      (for [hub (filter (comp :hub? places) core-ring)
+            :let [angle (get ring-angles hub)
+                  point (get place-points hub)
+                  non-ring-spokes (remove place-points (get-in places [hub :connections]))
+                  spoke-angles (rest (range (- angle 90) (+ angle 90) (/ 180 (inc (count non-ring-spokes)))))
+                  spoke-points (map #(geom/displace point % 70) spoke-angles)]]
+        (zipmap non-ring-spokes spoke-points)))))
+
 (defcomponent galaxy-map [data owner]
   (render [_]
-    (let [map-size    480
-          places      (:places data)
-          lang-names  (distinct (map (comp :name :language) (vals places)))
-          lang-colors (zipmap lang-names
-                              ["lightcoral" "gold" "darkseagreen" "cadetblue" "mediumpurple" "lightsalmon"])
-          core-ring
-          (loop [ring [(:name (first (filter :hub? (vals places))))]]
-            (let [prev (get places (last ring))
-                  in-core-ring?
-                  (fn [name]
-                    (let [place (get places name)]
-                      (or (:hub? place)
-                          (and (:border? place)
-                               (or (:hub? prev)
-                                   (not= (:name (:language place)) (:name (:language prev))))))))]
-              (if-let [next
-                       (->> (:connections prev)
-                            (remove (set ring))
-                            (filter in-core-ring?)
-                            (first))]
-                (recur (conj ring next))
-                ring)))
-          ring-angles  (zipmap core-ring (range 0 360 (/ 360 (count core-ring))))
-          place-points (zipmap core-ring
-                               (map #(geom/displace {:x (/ map-size 2) :y (/ map-size 2)}
-                                       (get ring-angles %) 140)
-                                    core-ring))
-          place-points
-          (apply merge place-points
-            (for [hub (filter (comp :hub? places) core-ring)
-                  :let [angle (get ring-angles hub)
-                        point (get place-points hub)
-                        non-ring-spokes (remove place-points (get-in places [hub :connections]))
-                        spoke-angles (rest (range (- angle 90) (+ angle 90) (/ 180 (inc (count non-ring-spokes)))))
-                        spoke-points (map #(geom/displace point % 70) spoke-angles)]]
-              (zipmap non-ring-spokes spoke-points)))
-          connections
-          (->> (for [{:keys [name connections]} (vals places)
-                     connection connections]
-                 (sort [name connection]))
-               (distinct)
-               (map (partial mapv place-points)))]
-      (dom/svg {:class "galaxy-map"
-                :xmlns "http://www.w3.org/2000/svg"
-                :width map-size
-                :height map-size
-                :viewBox (str "0 0 " map-size " " map-size)}
-        (dom/g {:class "connections"}
-          (for [[{x1 :x y1 :y} {x2 :x y2 :y}] connections]
-            (dom/line {:x1 x1 :y1 y1 :x2 x2 :y2 y2})))
-        (dom/g {:class "places"}
-          (for [place (vals places)
-                :let [{:keys [hub? name]} place
-                      {:keys [x y]} (get place-points name)
-                      color  (get lang-colors (:name (:language place)))
-                      here?  (and (:docked? data) (= name (:location data)))
-                      radius (cond-> (if hub? 16 10) here? (- 2))]]
-            (dom/g {:class (cond-> "map-location" hub? (str " hub") here? (str " here"))}
-              (dom/circle {:cx x :cy y :r radius :fill color})
-              (dom/text {:x x
-                         :y (- y (+ radius 4))
-                         :text-anchor "middle"
-                         :font-size 12}
-                (dom/tspan {:font-size 16} (when here? "📍"))
-                (dom/tspan {} name)))))))))
+    (let [{:keys [destination docked? info-target location places]} data
+          place-points (layout-places places)
+          target-place (when (= (:type info-target) :place) info-target)
+          set-target!  (fn [target ev]
+                         (.stopPropagation ev)
+                         (om/update! data :info-target target))]
+      (dom/svg
+        {:class "galaxy-map"
+         :xmlns "http://www.w3.org/2000/svg"
+         :width map-size :height map-size
+         :viewBox (str "0 0 " map-size " " map-size)
+         :on-click (partial set-target! nil)}
+        ;; first we draw all the connections...
+        (let [target-path (some->> target-place (cards/pathfind data location) set)
+              travel-ends [location destination]
+              connections (->> (vals places)
+                               (mapcat (fn [{:keys [name connections]}]
+                                         (map #(-> [name %]) connections)))
+                               (util/distinct-by set))]
+          (dom/g {:class "connections"}
+            (for [[end1 end2 :as conn-ends] connections
+                  :let [here?   (and (not docked?) (= (set conn-ends) (set travel-ends)))
+                        ends    (if here? travel-ends conn-ends)
+                        target? (every? (partial contains? target-path) ends)
+                        [p1 p2] (map place-points ends)]]
+              (dom/line
+                {:class (cond here? "here" target? "target")
+                 :x1 (:x p1) :y1 (:y p1) :x2 (:x p2) :y2 (:y p2)}))))
+        ;; ...and then we draw all the places
+        (let [lang-names  (distinct (map (comp :name :language) (vals places)))
+              lang-colors (zipmap lang-names map-colors)
+              job-dests   (set (map :destination (:cargo data)))]
+          (dom/g {:class "places"}
+            (for [{:keys [name] :as place} (vals places)
+                  :let [{:keys [x y]} (get place-points name)
+                        color   (get lang-colors (:name (:language place)))
+                        dest?   (and (not docked?) (= name destination))
+                        here?   (or (= name location) dest?)
+                        job?    (contains? job-dests name)
+                        target? (= name (:name target-place))
+                        radius  (if (:hub? place) 16 10)]]
+              (dom/g {:class (cond-> "map-location" here? (str " here") target? (str " target"))}
+                (dom/circle
+                  {:cx x :cy y :r radius :fill color
+                   :on-click (partial set-target! place)})
+                (dom/text
+                  {:x x :y (- y (+ radius 4))
+                   :text-anchor "middle" :font-size 12
+                   :on-click (partial set-target! place)}
+                  (dom/tspan {:font-size 16}
+                    (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
+                  (dom/tspan name))))))))))
+
+(defn comma-list [items]
+  (cond
+    (empty? items) ""
+    (= (count items) 1) (first items)
+    (= (count items) 2) (str (first items) " and " (second items))
+    :else (str (str/join ", " (butlast items)) ", and " (last items))))
+
+(defcomponent info-box [data owner]
+  (render [_]
+    (when-let [target (:info-target data)]
+      (case (:type target)
+        :place
+          (dom/div {:class "info-box place"}
+            (dom/strong (:name target)) " is an inhabited "
+            (rand-nth ["planetary " "solar " "star " ""]) "system. "
+            "The dominant culture there is " (:name (:language target)) ". "
+            (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
+            "xports include " (comma-list (map name (:exports target))) ". "
+            (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
+            "mports include " (comma-list (map name (:imports target))) ".")))))
 
 (defcomponent app [data owner]
   (render [_]
     (dom/div {:class "app"}
-      (dom/div {:class "location"}
-        (if (:docked? data)
-          (:location data)
-          (str "En route to: " (:destination data))))
-      (om/build card-view (:card data))
-      (om/build choice-buttons data)
-      (om/build stat-bars (:stats data))
-      (dom/div {:class "lists"}
-        (om/build crew-list data)
-        (om/build cargo-list data))
-      (om/build galaxy-map data))))
+      (dom/div {:class "left"}
+        (dom/div {:class "location"}
+          (if (:docked? data)
+            (:location data)
+            (str "En route to: " (:destination data))))
+        (om/build card-view (:card data))
+        (om/build choice-buttons data)
+        (om/build stat-bars (:stats data))
+        (dom/div {:class "lists"}
+          (om/build crew-list data)
+          (om/build cargo-list data)))
+      (dom/div {:class "right"}
+        (om/build galaxy-map data)
+        (om/build info-box data)))))
 
 (defn init! []
   (enable-console-print!)

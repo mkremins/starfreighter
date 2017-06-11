@@ -9,6 +9,36 @@
 (defn current-place [state]
   (get (:places state) (:location state)))
 
+(defn adjacencies [state loc]
+  (:connections (cond->> loc (string? loc) (get (:places state)))))
+
+(defn distance-tiers [state]
+  (let [first-tier (vec (:connections (current-place state)))]
+    (loop [tiers [first-tier]
+           visited (conj (set first-tier) (:location state))]
+      (let [this-tier
+            (->> (last tiers)
+                 (mapcat (comp :connections (:places state)))
+                 (remove visited)
+                 (distinct)
+                 (vec))]
+        (if (empty? this-tier)
+          tiers
+          (recur (conj tiers this-tier)
+                 (into visited this-tier)))))))
+
+(defn pathfind [state from to]
+  (let [from  (cond-> from (map? from) (:name from))
+        to    (cond-> to (map? to) (:name to))]
+    (if (= from to)
+      [from]
+      (loop [paths [[from]]
+             visited #{from}]
+        (let [adjacencies* #(remove visited (adjacencies state %))
+              paths' (mapcat #(map (partial conj %) (adjacencies* (peek %))) paths)]
+          (or (first (filter #(= (peek %) to) paths'))
+              (recur paths' (into visited (map peek paths')))))))))
+
 (defn rand-destination [state]
   (rand-nth
     (conj (:connections (current-place state))
