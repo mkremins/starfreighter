@@ -185,14 +185,16 @@
                 :let [{:keys [hub? name]} place
                       {:keys [x y]} (get place-points name)
                       color  (get lang-colors (:name (:language place)))
-                      radius (if hub? 16 10)]]
-            (dom/g {:class (cond-> "map-location" hub? (str " hub"))}
+                      here?  (and (:docked? data) (= name (:location data)))
+                      radius (cond-> (if hub? 16 10) here? (- 2))]]
+            (dom/g {:class (cond-> "map-location" hub? (str " hub") here? (str " here"))}
               (dom/circle {:cx x :cy y :r radius :fill color})
               (dom/text {:x x
                          :y (- y (+ radius 4))
                          :text-anchor "middle"
                          :font-size 12}
-                name))))))))
+                (dom/tspan {:font-size 16} (when here? "📍"))
+                (dom/tspan {} name)))))))))
 
 (defcomponent app [data owner]
   (render [_]
