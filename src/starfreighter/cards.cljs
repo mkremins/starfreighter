@@ -44,6 +44,16 @@
     (conj (:connections (current-place state))
           (rand-nth (remove #{(:location state)} (keys (:places state)))))))
 
+(defn where-to-next [state]
+  (let [place (current-place state)
+        cargo-dests (map :destination (:cargo state))]
+    (if (empty? cargo-dests)
+      (rand-nth (:connections place))
+      (->> (map (partial pathfind state place) cargo-dests)
+           (sort-by count <)
+           (first)
+           (second)))))
+
 (defn open-cargo-slots [state]
   (- (:max-cargo state) (count (:cargo state))))
 
@@ -475,7 +485,7 @@
                        (let [last-hitter (:last-hitter (:fight-info state))]
                          {:type :info
                           :speaker last-hitter
-                          :text (str "That’ll teach you to mess with " (:name speaker) "! "
+                          :text (str "That’ll teach you to mess with " (:name last-hitter) "! "
                                      "C’mon, Cap’n, let’s get outta here.")
                           :ok #(-> % (dissoc :fight-info)
                                      (assoc :deck port-deck)
@@ -615,25 +625,27 @@
  :weight #(+ (util/bucket (count (:cargo %)) [[2 1] [3 2] [4 4] [5 6] [6 8]])
              (util/bucket (count (:recent-picks %)) [[5 1] [7 2] [100 3]]))
  :gen (fn [state]
-        {:type :yes-no
-         :speaker (rand-nth (:crew state))
-         :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
-                                    "to be had round here are pretty slim.")
-                               "Say, Cap’n… we’ve been in port a while, haven’t we?"
-                               "Sitting here in port is getting mighty boring, Cap’n."
-                               "We’re all getting pretty restless, Cap’n."
-                               "We’ve been in port a good while now."])
-                    " "
-                    (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
-                    " we "
-                    (rand-nth ["get a move on" "get going" "hit the road"])
-                    (rand-nth ["" " already"]) "?")
-         :yes #(assoc % :docked? false
-                        :deck starbound-deck
-                        :destination (let [dests (filter identity (map :destination (:cargo %)))]
-                                       (if (seq dests) (rand-nth dests) (rand-destination state)))
-                        :recent-picks #{})
-         :no (adjust-stat :crew -5)})}
+        (let [proposed-dest (where-to-next state)]
+          {:type :yes-no
+           :speaker (rand-nth (:crew state))
+           :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
+                                      "to be had round here are pretty slim.")
+                                 "Say, Cap’n… we’ve been in port a while, haven’t we?"
+                                 "Sitting here in port is getting mighty boring, Cap’n."
+                                 "We’re all getting pretty restless, Cap’n."
+                                 "We’ve been in port a good while now."])
+                      " "
+                      (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
+                      " we "
+                      (rand-nth ["get a move on" "get going" "hit the road"
+                                 (str "set out for " proposed-dest)
+                                 (str "shove off for " proposed-dest)])
+                      (rand-nth ["" " already"]) "?")
+           :yes #(assoc % :docked? false
+                          :deck starbound-deck
+                          :destination (where-to-next %)
+                          :recent-picks #{})
+           :no (adjust-stat :crew -5)}))}
 ])
 
 (defonce starbound-deck [
