@@ -228,14 +228,15 @@
                    :text-anchor "start" :font-size 18}
           (if docked? (str "📍 " location) (str "➡️ " destination)))
         ;; draw button to depart for target (if any)
-        (when (and docked? target-place
-                   (not= (:name target-place) location)
-                   (not (:prevent-travel? data)))
-          (dom/text {:class "depart-button"
-                     :x 468 :y 462 :text-anchor "end" :font-size 18
-                     :on-click #(do (.stopPropagation %)
-                                    (om/transact! data cards/prepare-to-depart))}
-            (str "➡️ " (:name target-place))))))))
+        (when (some-> target-place :name (not= location))
+          (let [enabled? (and docked? (cards/interruptible? (:card data)))]
+            (dom/text {:class (cond-> "depart-button" (not enabled?) (str " disabled"))
+                       :x 468 :y 462 :text-anchor "end" :font-size 18
+                       :on-click (if enabled?
+                                   #(do (.stopPropagation %)
+                                        (om/transact! data cards/prepare-to-depart))
+                                   #(.stopPropagation %))}
+              (str "➡️ " (:name target-place)))))))))
 
 (defcomponent info-span [data owner]
   (render [_]

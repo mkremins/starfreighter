@@ -260,6 +260,18 @@
  :gen (fn [state]
         (let [proposed-dest (db/where-to-next state)]
           {:type :yes-no
+           ;; TODO Making this card interruptible allows the player to "cheat" by manually initiating
+           ;; travel (via the map) when it comes up, then immediately canceling the initiated travel.
+           ;; This gets them a new card without imposing a penalty for rejecting the crew request.
+           ;;
+           ;; Practically speaking, the utility of this loophole seems pretty limited. If the crew
+           ;; wants to leave, you've probably already exhausted most of your other options in port,
+           ;; so this card is likely to come up again within the next few draws anyway. I'd like to
+           ;; close the hole at some point, but I'm not yet sure what the solution looks like, and
+           ;; it's not a priority for the time being. Still, this definitely seems like the sort of
+           ;; thing that's worth noting in case it turns out to have weird repercussions somewhere
+           ;; further down the line.
+           :interruptible? true
            :speaker (db/rand-crew-member state)
            :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
                                       "to be had round here are pretty slim.")
@@ -314,7 +326,7 @@
                 :weight (constantly 1)
                 :gen (fn [state]
                        {:type :game-over
-                        :text (str "You die tragically in a bar fight on " (:location state) ". ")
+                        :text (str "You die tragically in a bar fight on " (:location state) ".")
                         :deadly? true})}
 
                {:id :hit-with-object

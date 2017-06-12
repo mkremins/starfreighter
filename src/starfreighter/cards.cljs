@@ -9,18 +9,28 @@
   (into (mapv #(update % :prereq (partial every-pred :docked?)) port/cards)
         (mapv #(update % :prereq (partial every-pred (complement :docked?))) space/cards)))
 
+(defn interruptible?
+  "Returns whether a given `card` is interruptible – i.e. whether it's OK (both
+  gameplay- and narrative-wise) for the player to \"just walk away\" from the
+  situation the card represents, e.g. by initiating travel to another place."
+  [card]
+  (if (contains? card :interruptible?)
+    (:interruptible? card)
+    (case (:type card)
+      :game-over false
+      :info (= (:ok card) identity)
+      :yes-no (or (= (:yes card) identity)
+                  (= (:no card) identity)))))
+
 (defn prepare-to-depart [state]
-  (let [dest (:info-target state)
-        path (db/pathfind state dest)
-        permit-travel #(dissoc % :prevent-travel?)]
-    (assoc state
-      :prevent-travel? true
-      :card {:type :yes-no
-             :speaker (db/rand-crew-member state)
-             :text (str "Oh wow, leaving for " (:name dest) " already? "
-                        "Guess I’ll go fire up the engine!")
-             :yes (comp (db/depart-for (second path)) permit-travel)
-             :no permit-travel})))
+  (let [dest (:info-target state)]
+    (assoc state :card
+      {:type :yes-no
+       :interruptible? false
+       :speaker (db/rand-crew-member state)
+       :text (str "Oh wow, leaving for " (:name dest) " already? Guess I’ll go fire up the engine!")
+       :yes (db/depart-for (second (db/pathfind state dest)))
+       :no identity})))
 
 (defn applicable-game-over-if-any [{:keys [stats] :as state}]
   (cond
