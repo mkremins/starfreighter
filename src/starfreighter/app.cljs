@@ -55,7 +55,8 @@
         :link
           (let [linked (second data)
                 linked (cond->> linked (sequential? linked) (get-in @app-state))]
-            (dom/a {:on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
+            (dom/a {:class "info-link"
+                    :on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
               (:name linked)))
         ;else
           (dom/span (om/build-all content-span data)))
@@ -113,7 +114,10 @@
     (dom/p {:class "slot crew"}
       (if data
         (dom/span {}
-          (:name data)
+          (dom/a {:class "info-link"
+                  :on-click #(do (.stopPropagation %)
+                                 (om/update! (om/root-cursor app-state) :info-target data))}
+            (:name data))
           (let [traits (:traits data)
                 icons  {:fighter "👊"
                         :medic "💊"
@@ -139,9 +143,16 @@
       (if data
         (dom/span {}
           (:name data)
-          (let [destination (:destination data)]
-            (if destination
-              (str " ➡️ " destination)
+          (let [dest (:destination data)]
+            (if dest
+              (dom/span {} " ➡️ "
+                (dom/a {:class "info-link"
+                        :on-click
+                        (fn [ev]
+                          (.stopPropagation ev)
+                          (om/transact! (om/root-cursor app-state) []
+                            #(assoc % :info-target (get-in % [:places dest]))))}
+                  dest))
               "")))
         " "))))
 

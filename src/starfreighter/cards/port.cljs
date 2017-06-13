@@ -22,7 +22,8 @@
            :text [(rand-nth ["I’d like to enlist your services"
                              "I’ve got a job for you"
                              "I have a job for you"])
-                  ", Captain. Can you deliver this shipment of " stuff " to " dest "? "
+                  ", Captain. Can you deliver this shipment of " stuff " to "
+                  [:link [:places dest]] "? "
                   (if (pos? pay-before)
                     [(rand-nth [["I’ll pay you " pay " – half now"]
                                 ["Payment will be " pay " – half up front"]
@@ -46,11 +47,13 @@
  :weight (constantly 4)
  :gen (fn [state]
         (let [char (gen/gen-passenger-delivery-job state)
-              fare (:pay-before char)]
+              fare (:pay-before char)
+              dest (:destination char)]
           {:type :yes-no
            :speaker char
-           :text ["I’m in need of safe passage to " (:destination char) ". Can you take me there? "
-                  "I don’t have much, but "
+           :text ["I’m in need of safe passage to "
+                  [:link [:places (:destination char)]]
+                  ". Can you take me there? I don’t have much, but "
                   (rand-nth ["I can offer you" "I’ve saved up"]) " " [:cash fare]
                   (rand-nth [" – hopefully that’ll be enough."
                              " – I do hope that’s enough."
@@ -307,8 +310,8 @@
                   (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
                   " we "
                   (rand-nth ["get a move on" "get going" "hit the road"
-                             ["set out for " proposed-dest]
-                             ["shove off for " proposed-dest]])
+                             ["set out for " [:link [:places proposed-dest]]]
+                             ["shove off for " [:link [:places proposed-dest]]]])
                   (rand-nth ["" " already"]) "?"]
            :yes (db/depart-for proposed-dest)
            :no (db/adjust-stat :crew -5)}))}
@@ -590,8 +593,8 @@
           {:type :yes-no
            :speaker collector
            :text ["Hello, Captain. Remember that money you borrowed from "
-                  (:name lender)
-                  (rand-nth ["" [" back on " (:home lender)]])
+                  [:link [:places (:home lender) :merchants (:name lender)]]
+                  (rand-nth ["" [" back on " [:link [:places (:home lender)]]]])
                   "? Well, "
                   (rand-nth ["I’m here to collect it"
                              "I’ve been sent to collect it"
