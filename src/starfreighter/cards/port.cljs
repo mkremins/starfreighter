@@ -15,25 +15,27 @@
  :weight #(* 4 (db/open-cargo-slots %))
  :gen (fn [state]
         (let [cargo (gen/gen-normal-delivery-job state)
-              {dest :destination, pay-before :pay-before, stuff :name} cargo]
+              {dest :destination, pay-before :pay-before, stuff :name} cargo
+              pay [:cash (+ pay-before (:pay-after cargo))]]
           {:type :yes-no
            :speaker (:merchant cargo)
-           :text (str (rand-nth ["I’d like to enlist your services"
-                                 "I’ve got a job for you"
-                                 "I have a job for you"])
-                      ", Captain. Can you deliver this shipment of " stuff " to " dest "? "
-                      (if (pos? pay-before)
-                        (str (rand-nth ["I’ll pay you half now"
-                                        "Payment will be half up front"
-                                        "You’ll get half the pay now"])
-                             ", and half")
-                        (str "You’ll " (rand-nth ["be paid" "receive payment"]) " in full"))
-                      " "
-                      (rand-nth [(str "upon successful delivery of the " stuff)
-                                 (str "upon your arrival at " dest)
-                                 (str "when you arrive at " dest " with the " stuff)
-                                 (str "when you make it to " dest)])
-                      ".")
+           :text [(rand-nth ["I’d like to enlist your services"
+                             "I’ve got a job for you"
+                             "I have a job for you"])
+                  ", Captain. Can you deliver this shipment of " stuff " to " dest "? "
+                  (if (pos? pay-before)
+                    [(rand-nth [["I’ll pay you " pay " – half now"]
+                                ["Payment will be " pay " – half up front"]
+                                ["You’ll be paid " pay " – half the pay now"]])
+                     [", and " (rand-nth ["half" "the rest"])]]
+                    ["Pay will be " pay ", to be paid in full"])
+                  " "
+                  (rand-nth [["upon successful delivery of the " stuff]
+                             ["upon your arrival at " dest]
+                             ["when you arrive at " dest " with the " stuff]
+                             ["when you drop the " stuff " off at " dest]
+                             ["when you make it to " dest]])
+                  "."]
            :yes (comp (db/add-cargo cargo)
                       (db/adjust-stat :cash pay-before))
            :no identity}))}
@@ -43,12 +45,19 @@
  :prereq db/can-hold-more-cargo?
  :weight (constantly 4)
  :gen (fn [state]
-        (let [char (gen/gen-passenger-delivery-job state)]
+        (let [char (gen/gen-passenger-delivery-job state)
+              fare (:pay-before char)]
           {:type :yes-no
            :speaker char
-           :text (str "I’m in need of safe passage to " (:destination char) ". Can you take me there?")
+           :text ["I’m in need of safe passage to " (:destination char) ". Can you take me there? "
+                  "I don’t have much, but "
+                  (rand-nth ["I can offer you" "I’ve saved up"]) " " [:cash fare]
+                  (rand-nth [" – hopefully that’ll be enough."
+                             " – I do hope that’s enough."
+                             " – that should be enough, right?"
+                             " – that’s about standard, right?"])]
            :yes (comp (db/add-cargo char)
-                      (db/adjust-stat :cash (:pay-before char)))
+                      (db/adjust-stat :cash fare))
            :no identity}))}
 
 {:id :offer-buy-cargo
@@ -65,27 +74,24 @@
               amount   (if (contains? (:imports place) stuff) +30 +20)]
           {:type :yes-no
            :speaker merchant
-           :text (str (rand-nth ["Greetings" "Hello"])
-                      ", Captain. I’m " (rand-nth ["in the market" "looking"])
-                      " to buy some " stuff ", and it looks like you’ve got some for sale. "
-                      (rand-nth ["Care to make"
-                                 "Could I interest you in"
-                                 "Want to make"
-                                 "Would you like to make"])
-                      " a deal?")
+           :text [(rand-nth ["Greetings" "Hello"])
+                  ", Captain. I’m " (rand-nth ["in the market" "looking"])
+                  " to buy some " stuff ", and it looks like you’ve got some for sale. "
+                  (rand-nth [["How does " [:cash amount] " sound to you?"]
+                             ["I can offer you " [:cash amount] " – sound like a deal?"]])]
            :yes (comp (db/adjust-stat :cash amount)
                       (db/drop-cargo item)
                       (if (:counterfeit? item)
                         (db/set-next-card
                           {:type :info
                            :speaker merchant
-                           :text (str (rand-nth ["Hey…" "Hey, hold on a second…" "Hey, wait a minute…"])
-                                      " "
-                                      (rand-nth ["are you trying to pull one over on me"
-                                                 "just who do you think you’re fooling"
-                                                 "what’re you trying to pull"
-                                                 "who do you think you’re fooling"])
-                                      "? This " stuff " is counterfeit! I demand a refund!")
+                           :text [(rand-nth ["Hey…" "Hey, hold on a second…" "Hey, wait a minute…"])
+                                  " "
+                                  (rand-nth ["are you trying to pull one over on me"
+                                             "just who do you think you’re fooling"
+                                             "what’re you trying to pull"
+                                             "who do you think you’re fooling"])
+                                  "? This " stuff " is counterfeit! I demand a refund!"]
                            :ok (comp (db/adjust-stat :cash (- amount))
                                      (db/adjust-player-rep merchant :tried-sell-counterfeit-goods))})
                         (db/adjust-player-rep merchant :sold-goods)))
@@ -98,21 +104,23 @@
  :gen (fn [state]
         (let [merchant (db/rand-merchant state)
               place    (db/current-place state)
-              stuff    (db/rand-export state)]
+              stuff    (db/rand-export state)
+              price    -15]
           {:type :yes-no
            :speaker merchant
-           :text (str "Looking for " stuff "? "
-                      (rand-nth [(str (rand-nth ["Boy howdy, have" "Have"]) " I got a "
-                                      (rand-nth ["" "great "]) "deal for you")
-                                 "How fortunate you are"
-                                 "It’s your lucky day"
-                                 "Well, you’re in luck"
-                                 "Well, you’ve come to the right place"
-                                 (str "What incredible " (rand-nth ["fortune" "luck"]))])
-                      "! "
-                      (rand-nth [(str "I’ve got the cheapest " stuff " this side of " (db/rand-destination state))
-                                 (str "With prices like these, I’m practically giving this " stuff " away")])
-                      ".")
+           :text ["Looking for " stuff "? "
+                  (rand-nth [[(rand-nth ["Boy howdy, have" "Have"]) " I got a "
+                              (rand-nth ["" "great "]) "deal for you"]
+                             "How fortunate you are"
+                             "It’s your lucky day"
+                             "Well, you’re in luck"
+                             "Well, you’ve come to the right place"
+                             ["What incredible " (rand-nth ["fortune" "luck"])]])
+                   "! I’m currently selling " stuff " for " (rand-nth ["just" "only"]) " "
+                   [:cash price] " " (rand-nth ["a pop" "per unit"])
+                   (rand-nth [[" – the lowest price you’ll get this side of " (db/rand-destination state)]
+                              [". With prices like these, I’m practically giving this " stuff " away"]])
+                   (rand-nth ["." "!"])]
            :yes (comp (db/add-cargo
                         {:name stuff
                          :seller merchant
@@ -121,7 +129,7 @@
                            (cond (db/trustworthy? merchant) {true 1 false 4}
                                  (db/untrustworthy? merchant) {true 4 false 1}
                                  :else {true 1 false 2}))})
-                      (db/adjust-stat :cash -15)
+                      (db/adjust-stat :cash price)
                       (db/adjust-player-rep merchant :bought-goods))
            :no identity}))}
 
@@ -133,45 +141,46 @@
         (let [char (gen/gen-local-character state)]
           {:type :yes-no
            :speaker char
-           :text (str (rand-nth ["Excuse me, Captain. "
-                                 "I’m looking for work, Captain. "
-                                 "You’re a spacer, right? "
-                                 ""])
-                      (rand-nth ["Any chance you’d have"
-                                 "Do you have"
-                                 "Do you think there might be"
-                                 "Have you got"
-                                 "Is there by any chance"
-                                 "Might there be"
-                                 "Might you have"])
-                      " "
-                      (rand-nth ["a place" "a use" "room"])
-                      " for "
-                      (rand-nth ["" "someone like "])
-                      "me in your crew? "
-                      (cond
-                        (contains? (:traits char) :fighter)
-                          (str "I’m not much of a deep thinker, but I can hold my own in a "
-                               (rand-nth ["fight" "scrap"]) ".")
-                        (contains? (:traits char) :mechanic)
-                          (str "If there’s one thing " (rand-nth ["I know" "I’m good at"])
-                               ", it’s fixing spaceships. I grew up around them, so I’ve been "
-                               (rand-nth ["at it" "doing it" "learning" "practicing"]) " my whole life.")
-                        (contains? (:traits char) :medic)
-                          (str "I don’t have any formal medical training, but "
-                               (rand-nth ["I know" "I’ve picked up"]) " enough to patch people up "
-                               "and keep them going after a close scrape.")
-                        :else
-                          (rand-nth [""
-                                     (str (rand-nth ["I don’t have any"
-                                                     "I don’t have much in the way of"
-                                                     "I haven’t got any"
-                                                     "I’ve got no"
-                                                     "I’ve not got much in the way of"])
-                                          " special skills"
-                                          (rand-nth [" or anything" " or anything like that" ""])
-                                          ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
-                                          " to learn.")])))
+           ;; TODO work a mention of pay into this somewhere
+           :text [(rand-nth ["Excuse me, Captain. "
+                             "I’m looking for work, Captain. "
+                             "You’re a spacer, right? "
+                             ""])
+                  (rand-nth ["Any chance you’d have"
+                             "Do you have"
+                             "Do you think there might be"
+                             "Have you got"
+                             "Is there by any chance"
+                             "Might there be"
+                             "Might you have"])
+                  " "
+                  (rand-nth ["a place" "a use" "room"])
+                  " for "
+                  (rand-nth ["" "someone like "])
+                  "me in your crew? "
+                  (cond
+                    (db/fighter? char)
+                      ["I’m not much of a deep thinker, but I can hold my own in a "
+                       (rand-nth ["fight" "scrap"]) "."]
+                    (db/mechanic? char)
+                      ["If there’s one thing " (rand-nth ["I know" "I’m good at"])
+                       ", it’s fixing spaceships. I grew up around them, so I’ve been "
+                       (rand-nth ["at it" "doing it" "learning" "practicing"]) " my whole life."]
+                    (db/medic? char)
+                      ["I don’t have any formal medical training, but "
+                       (rand-nth ["I know" "I’ve picked up"]) " enough to patch people up "
+                       "and keep them going after a close scrape."]
+                    :else
+                      (rand-nth [""
+                                 [(rand-nth ["I don’t have any"
+                                             "I don’t have much in the way of"
+                                             "I haven’t got any"
+                                             "I’ve got no"
+                                             "I’ve not got much in the way of"])
+                                  " special skills"
+                                  (rand-nth [" or anything" " or anything like that" ""])
+                                  ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
+                                  " to learn."]]))]
            :yes (comp (db/add-crew char)
                       (db/adjust-stat :cash -30)
                       (db/adjust-stat :crew +5))
@@ -183,57 +192,64 @@
  :prereq (every-pred (db/has-at-most? :cash 30) #(not (:loan-info %)))
  :weight #(util/bucket (:cash (:stats %)) [[10 4] [20 3] [30 2]])
  :gen (fn [state]
-        (let [lender (db/rand-merchant state)]
+        (let [lender (db/rand-merchant state)
+              amount 40]
           {:type :yes-no
            :speaker lender
-           :text (str (rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
-                      " I hear tell you’re "
-                      (rand-nth ["running a bit short on" "strapped for"])
-                      " cash. I could certainly lend you some… "
-                      "provided you agree to pay it back promptly, plus a bit of interest. "
-                      (rand-nth ["Do we have a deal?" "What do you say?"]))
+           :text [(rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
+                  " I hear tell you’re "
+                  (rand-nth ["running a bit short on" "strapped for"])
+                  " cash. I could certainly lend you, say, " [:cash amount] "… "
+                  "provided you agree to pay it back promptly, plus a bit of interest. "
+                  (rand-nth ["Do we have a deal?" "What do you say?"])]
            :yes (comp #(assoc % :loan-info
-                         {:lender lender
+                         {:amount amount
+                          :lender lender
                           :collector (gen/gen-local-character state)
                           :turn-borrowed (:turn state)})
-                      (db/adjust-stat :cash +40))
+                      (db/adjust-stat :cash amount))
            :no identity}))}
 
 {:id :offer-repair-ship
  :prereq (every-pred (db/has-at-most? :ship 70) (db/has-at-least? :cash 30))
  :weight #(util/bucket (:ship (:stats %)) [[20 16] [40 6] [100 4]])
  :gen (fn [state]
-        {:type :yes-no
-         :speaker (db/rand-merchant state)
-         :text (str "Looks like your ship’s in need of some repair – it’s practically falling apart! "
-                    "Want me to help you out with that?")
-         :yes (comp (db/adjust-stat :cash -30)
-                    (db/adjust-stat :ship +20))
-         :no identity})}
+        (let [price -30]
+          {:type :yes-no
+           :speaker (db/rand-merchant state)
+           :text ["Looks like your ship’s in need of some repair – it’s practically falling apart! "
+                  "Want me to help you out with that? It’ll only run you about " [:cash price] "."]
+           :yes (comp (db/adjust-stat :cash -30)
+                      (db/adjust-stat :ship +20))
+           :no identity}))}
 
 {:id :offer-upgrade-crew-quarters
  :prereq (every-pred #(< (:max-crew %) 6) (db/has-at-least? :cash 50))
  :weight #(if (db/can-hold-more-crew? %) 1 2)
  :gen (fn [state]
-        {:type :yes-no
-         :speaker (db/rand-merchant state)
-         :text (str "Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
-                    "to give you a little more breathing room… for a fair price, of course.")
-         :yes (comp #(update % :max-crew inc)
-                    (db/adjust-stat :cash -50))
-         :no identity})}
+        (let [price -50]
+          {:type :yes-no
+           :speaker (db/rand-merchant state)
+           :text ["Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
+                  "to give you a little more breathing room… for a fair price, of course. "
+                  "How does " [:cash price] " sound" (rand-nth ["" " to you"]) "?"]
+           :yes (comp #(update % :max-crew inc)
+                      (db/adjust-stat :cash price))
+           :no identity}))}
 
 {:id :offer-upgrade-cargo-hold
  :prereq (every-pred #(< (:max-cargo %) 12) (db/has-at-least? :cash 50))
  :weight #(if (db/can-hold-more-cargo? %) 1 2)
  :gen (fn [state]
-        {:type :yes-no
-         :speaker (db/rand-merchant state)
-         :text (str "You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
-                    "How about I do you a favor and modify this bucket of bolts? For a price, of course.")
-         :yes (comp #(update % :max-cargo inc)
-                    (db/adjust-stat :cash -50))
-         :no identity})}
+        (let [price -50]
+          {:type :yes-no
+           :speaker (db/rand-merchant state)
+           :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
+                  "How about I do you a favor and modify this bucket of bolts? For a price, of course. "
+                  "Does " [:cash price] " sound good" (rand-nth ["" " to you"]) "?"]
+           :yes (comp #(update % :max-cargo inc)
+                      (db/adjust-stat :cash price))
+           :no identity}))}
 
 ;;; requests from the crew
 
@@ -246,15 +262,16 @@
               just-one? (= crew-size 1)]
           {:type :yes-no
            :speaker (db/rand-crew-member state)
-           :text (str "Say, Cap’n… "
-                      (rand-nth (if just-one? ["I’ve" "we’ve" "we’ve both"] ["we’ve" "we’ve all"]))
-                      " been working pretty hard lately, and "
-                      (if just-one?
-                        "I was"
-                        (str (rand-nth ["the rest of the crew and I" "we"]) " were"))
-                      " wondering if " (rand-nth ["maybe " ""]) (if just-one? "I" "we")
-                      " might be due a small bonus for everything " (if just-one? "I" "we")
-                      " do" (rand-nth ["." " around here."]))
+           ;; TODO work a mention of amount into this somewhere
+           :text ["Say, Cap’n… "
+                  (rand-nth (if just-one? ["I’ve" "we’ve" "we’ve both"] ["we’ve" "we’ve all"]))
+                  " been working pretty hard lately, and "
+                  (if just-one?
+                    "I was"
+                    [(rand-nth ["the rest of the crew and I" "we"]) " were"])
+                  " wondering if " (rand-nth ["maybe " ""]) (if just-one? "I" "we")
+                  " might be due a small bonus for everything " (if just-one? "I" "we")
+                  " do" (rand-nth ["." " around here."])]
            :yes (comp (db/adjust-stat :cash (* -5 crew-size))
                       (db/adjust-stat :crew (* +5 crew-size)))
            :no (db/adjust-stat :crew (* -2 (count (:crew state))))}))}
@@ -280,19 +297,19 @@
            ;; further down the line.
            :interruptible? true
            :speaker (db/rand-crew-member state)
-           :text (str (rand-nth [(str "Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
-                                      "to be had round here are pretty slim.")
-                                 "Say, Cap’n… we’ve been in port a while, haven’t we?"
-                                 "Sitting here in port is getting mighty boring, Cap’n."
-                                 "We’re all getting pretty restless, Cap’n."
-                                 "We’ve been in port a good while now."])
-                      " "
-                      (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
-                      " we "
-                      (rand-nth ["get a move on" "get going" "hit the road"
-                                 (str "set out for " proposed-dest)
-                                 (str "shove off for " proposed-dest)])
-                      (rand-nth ["" " already"]) "?")
+           :text [(rand-nth [["Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
+                              "to be had round here are pretty slim."]
+                             "Say, Cap’n… we’ve been in port a while, haven’t we?"
+                             "Sitting here in port is getting mighty boring, Cap’n."
+                             "We’re all getting pretty restless, Cap’n."
+                             "We’ve been in port a good while now."])
+                  " "
+                  (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
+                  " we "
+                  (rand-nth ["get a move on" "get going" "hit the road"
+                             ["set out for " proposed-dest]
+                             ["shove off for " proposed-dest]])
+                  (rand-nth ["" " already"]) "?"]
            :yes (db/depart-for proposed-dest)
            :no (db/adjust-stat :crew -5)}))}
 
@@ -316,8 +333,8 @@
                        (let [last-hitter (:last-hitter (:fight-info state))]
                          {:type :info
                           :speaker last-hitter
-                          :text (str "That’ll teach you to mess with " (:name last-hitter) "! "
-                                     "C’mon, Cap’n, let’s get outta here.")
+                          :text ["That’ll teach you to mess with " (:name last-hitter) "! "
+                                 "C’mon, Cap’n, let’s get outta here."]
                           :ok #(-> % (dissoc :fight-info)
                                      (db/unset-deck)
                                      (db/adjust-stat :crew +5)
@@ -333,7 +350,7 @@
                 :weight (constantly 1)
                 :gen (fn [state]
                        {:type :game-over
-                        :text (str "You die tragically in a bar fight on " (:location state) ".")
+                        :text ["You die tragically in a bar fight on " (:location state) "."]
                         :deadly? true})}
 
                {:id :hit-with-object
@@ -344,10 +361,10 @@
                        (let [hitter (rand-nth (remove db/unconscious? crew))
                              target (rand-nth (remove db/unconscious? (vals (:opponents fight-info))))]
                          {:type :info
-                          :text (str (:shortname hitter) " hits one of your assailants with a "
-                                     (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                                     ", knocking them to the ground. It doesn’t look like they’ll be "
-                                     "getting up any time soon.")
+                          :text [(:shortname hitter) " hits one of your assailants with a "
+                                 (rand-nth ["bottle" "chair" "pitcher" "table leg"])
+                                 ", knocking them to the ground. It doesn’t look like they’ll be "
+                                 "getting up any time soon."]
                           :ok #(-> % (update-in [:fight-info :opponents (:name target) :traits] conj :unconscious)
                                      (assoc-in [:fight-info :last-hitter] (:name hitter)))
                           :icon "💥"}))}
@@ -360,10 +377,10 @@
                        (let [hitter (rand-nth (remove db/unconscious? (vals (:opponents fight-info))))
                              target (rand-nth (remove db/unconscious? crew))]
                          {:type :info
-                          :text (str "One of your assailants hits " (:shortname target) " with a "
-                                     (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                                     ", knocking them to the ground. It doesn’t look like they’ll be "
-                                     "getting up any time soon.")
+                          :text ["One of your assailants hits " (:shortname target) " with a "
+                                 (rand-nth ["bottle" "chair" "pitcher" "table leg"])
+                                 ", knocking them to the ground. It doesn’t look like they’ll be "
+                                 "getting up any time soon."]
                           :ok (fn [state]
                                 (update state :crew
                                   (partial mapv #(cond-> % (= % target) (update :traits conj :unconscious)))))
@@ -378,16 +395,16 @@
                                  (assoc :fight-info {:opponents (zipmap (map :name opponents) opponents)}))))}
               walk-away
               {:type :info
-               :text (str "You gather your crew and walk out of the bar, determinedly ignoring "
-                          "the look of protest on " (:shortname speaker) "’s face.")
+               :text ["You gather your crew and walk out of the bar, determinedly ignoring "
+                      "the look of protest on " (:shortname speaker) "’s face."]
                :ok (db/adjust-stat :crew -5)}
               confrontation
               {:type :yes-no
                :speaker patron
-               :text (rand-nth [(str "Oi! We don’t take too kindly to spacers round these parts. "
-                                     "How’s about you shove off afore we start doin’ the shoving!")
-                                (str "Spacer, eh? Don’t see too many of your kind round these parts. "
-                                     "Reckon you oughta be on your way now.")])
+               :text (rand-nth [["Oi! We don’t take too kindly to spacers round these parts. "
+                                 "How’s about you shove off afore we start doin’ the shoving!"]
+                                ["Spacer, eh? Don’t see too many of your kind round these parts. "
+                                 "Reckon you oughta be on your way now."]])
                :yes (db/set-next-card walk-away)
                :no (db/set-next-card bar-fight)}
               walk-to-bar
@@ -399,8 +416,8 @@
                :no (db/set-next-card confrontation)}]
           {:type :yes-no
            :speaker speaker
-           :text (str "Hey, Cap’n – have you even left the ship since we got into port? "
-                      "C’mon, come have a drink with us!")
+           :text ["Hey, Cap’n – have you even left the ship since we got into port? "
+                  "C’mon, come have a drink with us!"]
            :yes (db/set-next-card walk-to-bar)
            :no identity}))}
 
@@ -411,8 +428,8 @@
         (let [speaker (db/rand-crew-member state)
               dealer  (db/rand-merchant state)
               did-well
-              (str "Ooh, that’s not bad at all! You, my friend, might just be in for an exceptionally good night. "
-                   "Alright then, let’s have another go!")
+              ["Ooh, that’s not bad at all! You, my friend, might just be in for an exceptionally good night. "
+               "Alright then, let’s have another go!"]
               broke-even
               "How inconclusive! That’s simply no fun at all – best have another go!"
               did-poorly
@@ -451,8 +468,8 @@
                      :no (db/set-next-card (walk-away attempts))})]
             {:type :yes-no
              :speaker speaker
-             :text (str "Hey, Cap’n – as long as we’re in port, I’m gonna go try my "
-                        (rand-nth ["hand" "luck"]) " at some gambling. Wanna come along?")
+             :text ["Hey, Cap’n – as long as we’re in port, I’m gonna go try my "
+                    (rand-nth ["hand" "luck"]) " at some gambling. Wanna come along?"]
              :yes (db/set-next-card (make-wager 0))
              :no identity})))}
 
@@ -461,6 +478,7 @@
  :weight #(util/bucket (:crew (:stats %)) [[5 8] [10 6] [15 4] [20 2] [30 1]])
  :gen (fn [state]
         (let [speaker (db/rand-crew-member state)
+              bonus   -30
               fail-to-convince
               {:type :info
                :speaker speaker
@@ -470,21 +488,21 @@
               (if (>= (:cash (:stats state)) 30)
                 {:type :yes-no
                  :speaker speaker
-                 :text (str "Hmm. Well, if you gave me a really substantial bonus, "
-                            "I suppose there’s a chance you might be able to convince me to stay on…")
+                 :text ["Hmm. Well, if you gave me a really substantial bonus – say, " [:cash bonus]
+                        " – I suppose there’s a chance you might be able to convince me to stay on…"]
                  :yes (comp (db/adjust-stat :crew +10)
-                            (db/adjust-stat :cash -30))
+                            (db/adjust-stat :cash bonus))
                  :no (db/set-next-card
                         (assoc fail-to-convince :text
                           "Alright, then – I guess it’s official. I quit."))}
                 (assoc fail-to-convince :text
-                  (str "Sorry, but I just don’t think there’s anything you can offer me "
-                       "that would be enough to convince me to stay.")))]
+                  ["Sorry, but I just don’t think there’s anything you can offer me "
+                   "that would be enough to convince me to stay."]))]
           {:type :yes-no
            :speaker speaker
-           :text (str "Sorry, Cap’n, but I think " (rand-nth ["this" (:location state)])
-                      " might just be the end of the line for me. I’d like to request "
-                      "your permission to resign.")
+           :text ["Sorry, Cap’n, but I think " (rand-nth ["this" (:location state)])
+                  " might just be the end of the line for me. I’d like to request "
+                  "your permission to resign."]
            :yes (comp (db/drop-crew speaker)
                       (db/adjust-stat :crew +10))
            :no (db/set-next-card next-if-no)}))}
@@ -499,10 +517,10 @@
  :gen (fn [state]
         {:type :info
          :speaker (rand-nth (filter #(= (:home %) (:location state)) (:crew state)))
-         :text (str "Y’know, Cap’n, I never thought I’d say this, but it’s actually "
-                    "kind of nice to " (rand-nth ["see" "visit"]) " "
-                    (rand-nth ["home" "my home planet" "my old home planet"])
-                    " again. Especially since this time, I know I can leave whenever I want!")
+         :text ["Y’know, Cap’n, I never thought I’d say this, but it’s actually "
+                "kind of nice to " (rand-nth ["see" "visit"]) " "
+                (rand-nth ["home" "my home planet" "my old home planet"])
+                " again. Especially since this time, I know I can leave whenever I want!"]
          :ok (db/adjust-stat :crew +10)})}
 
 ;;; followups for ongoing plotlines
@@ -518,15 +536,15 @@
               pay-up
               {:type :info
                :speaker collector
-               :text (str "Pleasure doing business with you, Captain. "
-                          (:shortname lender) " sends their regards!")
+               :text ["Pleasure doing business with you, Captain. "
+                      (:shortname lender) " sends their regards!"]
                :ok #(dissoc % :loan-info)}
               surrender
               {:type :game-over
-               :text (str "Your ship is repossessed and your remaining assets seized. "
-                          "Your only hope is that they are collectively worth enough "
-                          "to clear the debt and keep you out of indentured servitude "
-                          "to " (:name lender) ".")}
+               :text ["Your ship is repossessed and your remaining assets seized. "
+                      "Your only hope is that they are collectively worth enough "
+                      "to clear the debt and keep you out of indentured servitude "
+                      "to " (:name lender) "."]}
               fight-outcome
               (let [fight-score (reduce + (map #(if (db/fighter? %) 2 1) (:crew state)))
                     enemy-fight-score (rand/rand-int* 2 5)
@@ -535,53 +553,52 @@
                   (> fight-score enemy-fight-score)
                     {:type :info
                      :speaker (or fighter-if-any (db/rand-crew-member state))
-                     :text (str "Yee-haw, look at ‘em run! All you gotta do is zap the leader "
-                                "and the rest’ll go running for the hills.")
+                     :text ["Yee-haw, look at ‘em run! All you gotta do is zap the leader "
+                            "and the rest’ll go running for the hills."]
                      :ok (comp #(assoc-in % [:loan-info :collection-failed?] true)
                                (db/adjust-stat :crew +15))}
                   (= fight-score enemy-fight-score)
                     {:type :info
                      :speaker collector
-                     :text (str "Well then… looks like this is my cue to exit. When next we meet, "
-                                "please do try to be a bit more civil – otherwise I might have to do "
-                                "something we’ll both regret.")
+                     :text ["Well then… looks like this is my cue to exit. When next we meet, "
+                            "please do try to be a bit more civil – otherwise I might have to do "
+                            "something we’ll both regret."]
                      :ok #(assoc-in % [:loan-info :collection-failed?] true)}
                   (< fight-score enemy-fight-score)
                     {:type :game-over
                      :deadly? true
-                     :text (str "All at once, your chest lights up with pain, and you instinctively "
-                                "gasp for air. The last thing you see before you lose consciousness is "
-                                "the slight frown of disapproval on " (:name collector) "’s face.")}))
+                     :text ["All at once, your chest lights up with pain, and you instinctively "
+                            "gasp for air. The last thing you see before you lose consciousness is "
+                            "the slight frown of disapproval on " (:name collector) "’s face."]}))
               fight
               {:type :info
-               :text (str "You’re not sure who shoots first. Your crew are quick on the draw, "
-                          "but so are " (:shortname collector) "’s goons. Dust flies in your face "
-                          "as you duck for cover, the air around you full of searing light.")
+               :text ["You’re not sure who shoots first. Your crew are quick on the draw, "
+                      "but so are " (:shortname collector) "’s goons. Dust flies in your face "
+                      "as you duck for cover, the air around you full of searing light."]
                :icon "💥"
                :ok (comp (db/set-next-card fight-outcome)
                          (db/adjust-player-rep lender :refused-repay-fought-collector))}
               cant-afford
               {:type :yes-no
                :speaker collector
-               :text (str "Ah, you can’t afford it? That is indeed a problem. "
-                          "In that case, I’m afraid I’ll have to ask you to surrender your vessel "
-                          "and submit to arrest. We must recoup our losses somehow…")
+               :text ["Ah, you can’t afford it? That is indeed a problem. "
+                      "In that case, I’m afraid I’ll have to ask you to surrender your vessel "
+                      "and submit to arrest. We must recoup our losses somehow…"]
                :yes (comp (db/adjust-stat :cash -100)
                           (db/set-next-card surrender))
                :no (db/set-next-card fight)}]
           {:type :yes-no
            :speaker collector
-           :text (str "Hello, Captain. Remember that money you borrowed from "
-                      (:name lender)
-                      (rand-nth ["" (str " back on " (:home lender))])
-                      "? Well, "
-                      (rand-nth ["I’m here to collect it"
-                                 "I’ve been sent to collect it"
-                                 "it’s time to pay up"])
-                      "! "
-                      (rand-nth ["C" "Now, c"]) "an we"
-                      (rand-nth [" all" ""])
-                      " agree to do this the easy way?")
+           :text ["Hello, Captain. Remember that money you borrowed from "
+                  (:name lender)
+                  (rand-nth ["" [" back on " (:home lender)]])
+                  "? Well, "
+                  (rand-nth ["I’m here to collect it"
+                             "I’ve been sent to collect it"
+                             "it’s time to pay up"])
+                  "! "
+                  (rand-nth ["C" "Now, c"]) "an we" (rand-nth [" all" ""])
+                  " agree to do this the easy way?"]
            :yes (if (db/has-at-least? state :cash 50)
                   (comp (db/adjust-stat :cash -50)
                         (db/set-next-card pay-up))

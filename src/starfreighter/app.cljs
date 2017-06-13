@@ -42,6 +42,25 @@
         (update :turn inc)
         (dissoc :next-card))))
 
+(defcomponent content-span [data owner]
+  (render [_]
+    (if (sequential? data)
+      (case (first data)
+        :cash
+          (let [amount (second data)]
+            (dom/span {:class (str "cash-value " (if (neg? amount) "neg" "pos"))}
+              (js/Math.abs (second data))))
+        :subject
+          (dom/strong (om/build-all content-span (rest data)))
+        :link
+          (let [linked (second data)
+                linked (cond->> linked (sequential? linked) (get-in @app-state))]
+            (dom/a {:on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
+              (:name linked)))
+        ;else
+          (dom/span (om/build-all content-span data)))
+      (dom/span data))))
+
 (defcomponent card-view [data owner]
   (render [_]
     (dom/div {:class "card"}
@@ -51,7 +70,8 @@
                    :on-click (when role
                                #(om/update! (om/root-cursor app-state) :info-target speaker))}
           (cond-> speaker (not (string? speaker)) :name)))
-      " " (:text data)
+      " "
+      (om/build content-span (:text data))
       (when (= (:type data) :game-over)
         (dom/p {:class "game-over"} "[Game Over]")))))
 
@@ -239,21 +259,6 @@
                                    #(.stopPropagation %))}
               (str "➡️ " (:name target-place)))))))))
 
-(defcomponent info-span [data owner]
-  (render [_]
-    (if (sequential? data)
-      (case (first data)
-        :subject
-          (dom/strong (om/build-all info-span (rest data)))
-        :link
-          (let [linked (second data)
-                linked (cond->> linked (sequential? linked) (get-in @app-state))]
-            (dom/a {:on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
-              (:name linked)))
-        ;else
-          (dom/span (om/build-all info-span data)))
-      (dom/span data))))
-
 (defcomponent info-box [data owner]
   (render [_]
     (when-let [target (or (:info-target data)
@@ -261,7 +266,7 @@
                           (get-in data [:places (:destination data)]))]
       (dom/div {:class "info-box"}
         (for [paragraph (desc/gen-description target)]
-          (dom/p (om/build-all info-span paragraph)))))))
+          (dom/p (om/build-all content-span paragraph)))))))
 
 (defcomponent app [data owner]
   (render [_]

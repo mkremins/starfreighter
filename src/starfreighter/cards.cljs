@@ -28,7 +28,7 @@
       {:type :yes-no
        :interruptible? false
        :speaker (db/rand-crew-member state)
-       :text (str "Oh wow, leaving for " (:name dest) " already? Guess I’ll go fire up the engine!")
+       :text ["Oh, we’re leaving for " (:name dest) " already? Guess I’ll go fire up the engine!"]
        :yes (db/depart-for (second (db/pathfind state dest)))
        :no identity})))
 
@@ -36,13 +36,13 @@
   (cond
     (and (zero? (:crew stats)) (:docked? state))
       {:type :game-over
-       :text (str "The crew, fed up with your leadership, steal your ship and depart, "
-                  "leaving you stranded on " (:location state) ".")}
+       :text ["The crew, fed up with your leadership, steal your ship and depart, "
+              "leaving you stranded on " (:location state) "."]}
     (and (zero? (:ship stats)) (not (:docked? state)))
       {:type :game-over
        :deadly? true
-       :text (str "With a horrific creak, your ship’s hull gives way, wrenching itself apart. "
-                  "A torrential rush of air sucks you nigh instantaneously into the vacuum of space.")}
+       :text ["With a horrific creak, your ship’s hull gives way, wrenching itself apart. "
+              "A torrential rush of air sucks you nigh instantaneously into the vacuum of space."]}
     :else
       nil))
 

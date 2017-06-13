@@ -63,6 +63,19 @@
     margin-top: 1em;
     text-align: center;
   }
+  .cash-value {
+    color: yellowgreen;
+    line-height: .9;  /* cancel out emoji expansion of line height to 1.1 */
+    white-space: pre; /* prevent linebreaks between :before, main content, and :after */
+  }
+  .cash-value:before {
+    content: "💰";
+    position: relative;
+    top: 2px; /* seems to look slightly better than having the bottom of the bag sitting at the baseline */
+  }
+  .cash-value:after {
+    content: "000";
+  }
   /* choices */
   .choices {
     display: flex;

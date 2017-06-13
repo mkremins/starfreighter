@@ -14,18 +14,18 @@
         (let [mechanic-if-any (db/crew-member-with-trait state :mechanic)]
           {:type :info
            :speaker (or mechanic-if-any (db/rand-crew-member state))
-           :text (str (rand-nth ["" "" "Ack! " "Ouch! "])
-                      (rand-nth ["What in the blazes was that?!"
-                                 "What in the name of Zark was that?!"
-                                 "What just happened?!"
-                                 "What was that?!"])
-                      " "
-                      (rand-nth ["Cap’n, I think" "Felt like" "I think" "Sounds like"])
-                      " something big "
-                      (rand-nth ["" "might’ve "])
-                      "just "
-                      (rand-nth ["bounced off" "crashed into" "hit"])
-                      " the ship!")
+           :text [(rand-nth ["" "" "Ack! " "Ouch! "])
+                  (rand-nth ["What in the blazes was that?!"
+                             "What in the name of Zark was that?!"
+                             "What just happened?!"
+                             "What was that?!"])
+                  " "
+                  (rand-nth ["Cap’n, I think" "Felt like" "I think" "Sounds like"])
+                  " something big "
+                  (rand-nth ["" "might’ve "])
+                  "just "
+                  (rand-nth ["bounced off" "crashed into" "hit"])
+                  " the ship!"]
            :ok (db/adjust-stat :ship -10)}))}
 
 {:id :info-ship-repaired
@@ -34,12 +34,12 @@
  :gen (fn [state]
         {:type :info
          :speaker (db/crew-member-with-trait state :mechanic)
-         :text (str "I’ve managed to make a few tweaks that might get this "
-                    (rand-nth ["hunk of junk" "rust bucket"])
-                    " running a little smoother. Hopefully it’ll "
-                    (rand-nth ["" "be enough to "])
-                    (rand-nth ["keep us going" "keep us moving" "smooth things over" "tide us over"])
-                    " until we can get a proper repair done in port.")
+         :text ["I’ve managed to make a few tweaks that might get this "
+                (rand-nth ["hunk of junk" "rust bucket"])
+                " running a little smoother. Hopefully it’ll "
+                (rand-nth ["" "be enough to "])
+                (rand-nth ["keep us going" "keep us moving" "smooth things over" "tide us over"])
+                " until we can get a proper repair done in port."]
          :ok (db/adjust-stat :ship +5)})}
 
 {:id :request-try-fix-engine
@@ -59,13 +59,13 @@
                    :speaker speaker
                    :text (if (= speaker mechanic)
                            "Dammit… apparently you shouldn’t have trusted me after all."
-                           (str "What a disaster! It’s just like I’m always saying: you can’t trust "
-                                (:shortname mechanic) " with anything complicated. You should know that by now!"))
+                           ["What a disaster! It’s just like I’m always saying: you can’t trust "
+                            (:shortname mechanic) " with anything complicated. You should know that by now!"])
                    :ok (db/adjust-stat :crew -10)}))]
           {:type :yes-no
            :speaker mechanic
-           :text (str "The engine’s really struggling, but I think I might know how to fix it! "
-                      "It’s a bit dangerous, though. Can I give it a try?")
+           :text ["The engine’s really struggling, but I think I might know how to fix it! "
+                  "It’s a bit dangerous, though. Can I give it a try?"]
            :yes (comp (db/set-next-card next-if-yes)
                       (db/adjust-stat :ship (if would-succeed? +10 -15)))
            :no identity}))}
@@ -73,14 +73,14 @@
 ;;; crew moods
 
 {:id :request-promise-cash
- :prereq (db/has-at-most? :cash 0)
+ :prereq (db/has-at-most? :cash 5)
  :weight (constantly 8)
  :gen (fn [state]
         {:type :yes-no
          :speaker (db/rand-crew-member state)
-         :text (str "I am starving! I know money’s tight and all, Cap’n, but can you please "
-                    "promise me we’ll at least earn enough at " (:destination state)
-                    " to stock up on food before we leave port again?")
+         :text ["I am starving! I know money’s tight and all, Cap’n, but can you please "
+                "promise me we’ll at least earn enough at " (:destination state)
+                " to stock up on food before we leave port again?"]
          :yes (db/adjust-stat :crew -10)
          :no (db/adjust-stat :crew -15)})}
 
@@ -92,30 +92,32 @@
         (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
           {:type :info
            :speaker crew-1
-           :text (str "Y’know, Cap’n, " (:shortname crew-2) " and I don’t always "
-                      (rand-nth ["agree on everything"
-                                 "get along"
-                                 "get along so well"
-                                 "see eye-to-eye"])
-                      ". But lately, I’ve really been enjoying "
-                      (rand-nth ["having them around"
-                                 "having them around the ship"
-                                 "their company"])
-                      ". "
-                      (rand-nth [""
-                                 (str (rand-nth ["Certainly helps keep"
-                                                 "Certainly keeps"
-                                                 "Definitely helps keep"
-                                                 "Definitely keeps"
-                                                 "It certainly helps keep"
-                                                 "It certainly keeps"
-                                                 "It definitely helps keep"
-                                                 "It definitely keeps"
-                                                 "It keeps"
-                                                 "Keeps"])
-                                      " "
-                                      (rand-nth ["me from getting bored!"
-                                                 "the boredom away!"]))]))
+           :text ["Y’know, Cap’n, " (:shortname crew-2) " and I don’t always "
+                  (rand-nth ["agree on everything"
+                             "get along"
+                             "get along so well"
+                             "see eye-to-eye"])
+                  ". But lately, I’ve really been enjoying "
+                  (rand-nth ["having them around"
+                             "having them around the ship"
+                             "their company"])
+                  ". "
+                  (rand-nth [""
+                             [(rand-nth ["Certainly helps keep"
+                                         "Certainly keeps"
+                                         "Definitely helps keep"
+                                         "Definitely keeps"
+                                         "Helps keep"
+                                         "It certainly helps keep"
+                                         "It certainly keeps"
+                                         "It definitely helps keep"
+                                         "It definitely keeps"
+                                         "It keeps"
+                                         "Keeps"])
+                              " "
+                              (rand-nth ["me from getting bored!"
+                                         "me on my toes!"
+                                         "the boredom away!"])]])]
            :ok (db/adjust-stat :crew +5)}))}
 
 {:id :info-crew-unfriendly
@@ -126,9 +128,9 @@
         (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
           {:type :info
            :speaker crew-1
-           :text (str "I can’t stand it anymore. " (:shortname crew-2) " "
-                      (rand-nth ["is driving me" "is going to drive me"]) " "
-                      (rand-nth ["crazy" "insane" "mad" "nuts"]) "!")
+           :text ["I can’t stand it anymore. " (:shortname crew-2) " "
+                  (rand-nth ["is driving me" "is going to drive me"]) " "
+                  (rand-nth ["crazy" "insane" "mad" "nuts"]) "!"]
            :ok (db/adjust-stat :crew -10)}))}
 
 {:id :info-crew-lonely
@@ -137,39 +139,38 @@
  :gen (fn [state]
         {:type :info
          :speaker (first (:crew state))
-         :text (str "Kinda " (rand-nth ["lonely" "quiet"]) " around here, isn’t it, Cap’n? "
-                    "I’m starting to think maybe we should hire on another crew member just for the company.")
+         :text ["Kinda " (rand-nth ["lonely" "quiet"]) " around here, isn’t it, Cap’n? "
+                "I’m starting to think maybe we should hire on another crew member just for the company."]
          :ok (db/adjust-stat :crew -2)})}
 
 {:id :info-too-many-passengers
- :prereq #(>= (count (db/passengers %)) (count (:crew %)))
- :weight #(util/bucket (- (count (db/passengers %)) (count (:crew %)))
-            [[0 1] [1 2] [2 4] [3 8] [4 16] [5 32]])
+ :prereq #(> (count (db/passengers %)) (count (:crew %)))
+ :weight #(js/Math.pow 2 (- (count (db/passengers %)) (count (:crew %))))
  :gen (fn [state]
         {:type :info
          :speaker (db/rand-crew-member state)
-         :text (str "There are too many passengers on board this boat! "
-                    ;; TODO variants replacing "they"/"them" with a specific passenger name?
-                    (rand-nth [(str "I can’t get any"
-                                    (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                                    (rand-nth ["" " with them around"])
-                                    " – they keep")
-                               (str "It’s impossible to get any"
-                                    (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                                    " with them"
-                                    (rand-nth ["" " always" " constantly"]))
-                               "They keep"
-                               (str "They’re " (rand-nth ["always" "constantly"]))])
-                    (rand-nth [" acting like tourists and"
-                               " eating all the food and"
-                               " hogging the bathroom and"
-                               " stumbling around the corridors and"
-                               ""])
-                    " getting underfoot. "
-                    (rand-nth [""
-                               (str "Can’t wait until we can let them off at " (:destination state) ".")
-                               "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
-                               (str "I’ll be so glad to see them go when we get to " (:destination state) ".")]))
+         :text ["There are too many passengers on board this boat! "
+                ;; TODO variants replacing "they"/"them" with a specific passenger name?
+                (rand-nth [["I can’t get any"
+                            (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                            (rand-nth ["" " with them around"])
+                            " – they keep"]
+                           ["It’s impossible to get any"
+                            (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                            " with them"
+                            (rand-nth ["" " always" " constantly"])]
+                           "They keep"
+                           ["They’re " (rand-nth ["always" "constantly"])]])
+                (rand-nth [" acting like tourists and"
+                           " eating all the food and"
+                           " hogging the bathroom and"
+                           " stumbling around the corridors and"
+                           ""])
+                " getting underfoot. "
+                (rand-nth [""
+                           ["Can’t wait until we can let them off at " (:destination state) "."]
+                           "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
+                           ["I’ll be so glad to see them go when we get to " (:destination state) "."]])]
          :ok (db/adjust-stat :crew -10)})}
 
 ;;; passenger antics
@@ -178,15 +179,17 @@
  :prereq #(> (count (db/passengers %)) 1)
  :weight (comp count db/passengers)
  :gen (fn [state]
-        {:type :yes-no
-         :speaker (rand-nth (db/passengers state))
-         :text (str "Excuse me, Captain. The passenger quarters are kind of uncomfortable, "
-                    "and I haven’t been able to get a lot of sleep. Could I maybe swap quarters "
-                    "with one of the crew for the rest of the voyage? I’d be willing to "
-                    (rand-nth ["compensate you" "pay you a little extra"]) " for your trouble.")
-         :yes (comp (db/adjust-stat :crew -10)
-                    (db/adjust-stat :cash +5))
-         :no identity})}
+        (let [tip +5]
+          {:type :yes-no
+           :speaker (rand-nth (db/passengers state))
+           :text ["Excuse me, Captain. The passenger quarters are kind of uncomfortable, "
+                  "and I haven’t been able to get a lot of sleep. Could I maybe move over "
+                  "to the crew quarters for the rest of the voyage? I’d be willing to "
+                  (rand-nth ["compensate you" "pay you a little extra"]) " – " [:cash tip]
+                  ", say – for your trouble."]
+           :yes (comp (db/adjust-stat :crew -10)
+                      (db/adjust-stat :cash tip))
+           :no identity}))}
 
 {:id :offer-passenger-join-crew
  :prereq (every-pred db/can-hold-more-crew?
@@ -199,8 +202,9 @@
         (let [passenger (rand-nth (db/passengers state))]
           {:type :yes-no
            :speaker passenger
-           :text (str "Seems like you could really use an extra pair of hands around here, Captain. "
-                      "And I am looking for work… d’you think there might be a place for me in your crew?")
+           ;; TODO work a mention of pay into this somewhere
+           :text ["Seems like you could really use an extra pair of hands around here, Captain. "
+                  "And I am looking for work… d’you think there might be a place for me in your crew?"]
            :yes (comp (db/add-crew passenger)
                       (db/drop-cargo passenger)
                       (db/adjust-stat :cash -20)
@@ -215,6 +219,9 @@
  :gen (fn [state]
         {:type :info
          :speaker (db/rand-crew-member state)
-         :text (str "Looks like we made it, Cap’n! Now approaching " (:destination state) ".")
+         :text [(rand-nth ["Looks like we made it"
+                           "Looks like we made it in one piece"
+                           "Made it in one piece"])
+                ", Cap’n! Now approaching " (:destination state) "."]
          :ok db/arrive})}
 ])
