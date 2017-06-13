@@ -11,7 +11,7 @@
 {:id :job-deliver-cargo
  :repeatable? true
  :prereq (every-pred db/can-hold-more-cargo?
-                     #(some db/will-trust-with-normal-job? (vals (:merchants %))))
+                     #(some db/will-trust-with-normal-job? (vals (:merchants (db/current-place %)))))
  :weight #(* 4 (db/open-cargo-slots %))
  :gen (fn [state]
         (let [cargo (gen/gen-normal-delivery-job state)
