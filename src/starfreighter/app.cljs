@@ -19,7 +19,7 @@
                :crew [(gen/gen-character place :crew) (gen/gen-character place :crew)]
                :cargo []
                :max-crew 3
-               :max-cargo 3
+               :max-cargo 6
                :places places
                :docked? true
                :location (:name place)

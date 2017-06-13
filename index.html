@@ -131,24 +131,37 @@
   .lists {
     display: flex;
   }
-  .list {
-    width: 47.5%;
+  .list > div {
+    display: flex;
+    flex-flow: row wrap;
   }
-  .list.crew {
-    margin-right: 2.5%;
+  .list.crew > div {
+    margin-right: 19px;
+    width: 203px;
   }
-  .list.cargo {
-    margin-left: 2.5%;
+  .list.cargo > div {
+    width: 418px;
+  }
+  .list.cargo > div > .slot:nth-child(odd) {
+    margin-right: 12px;
   }
   h2 {
-    margin-bottom: .75rem;
+    font-size: 21px;
+    margin-bottom: 12px;
+    text-align: center;
+    width: 100%;
+  }
+  .list.crew h2 {
+    padding-right: 19px;
   }
   .slot {
     background: #333;
-    margin-bottom: .75rem;
+    font-size: 14px;
+    margin-bottom: 12px;
     line-height: 1.1; /* to keep inline emoji from expanding the slot height */
     padding: .5rem;
-    white-space: pre;
+    white-space: pre-wrap; /* this is a band-aid and looks pretty ugly when wrapping occurs */
+    width: 203px;
   }
   /* galaxy map */
   .galaxy-map {

@@ -224,7 +224,7 @@
          :no identity})}
 
 {:id :offer-upgrade-cargo-hold
- :prereq (every-pred #(< (:max-cargo %) 6) (db/has-at-least? :cash 50))
+ :prereq (every-pred #(< (:max-cargo %) 12) (db/has-at-least? :cash 50))
  :weight #(if (db/can-hold-more-cargo? %) 1 2)
  :gen (fn [state]
         {:type :yes-no
