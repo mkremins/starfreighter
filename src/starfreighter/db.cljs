@@ -1,6 +1,5 @@
 (ns starfreighter.db
-  (:require [starfreighter.gen :as gen]
-            [starfreighter.rand :as rand]
+  (:require [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
 ;;; stats
@@ -16,7 +15,7 @@
 (defn adjust-stat
   ([stat amount] #(adjust-stat % stat amount))
   ([state stat amount]
-    (update-in state [:stats stat] #(-> % (+ amount) (min 100) (max 0)))))
+    (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100))))
 
 ;;; cargo, passengers, crew
 
@@ -71,7 +70,17 @@
   ([trait] #(has-trait? % trait))
   ([char trait] (contains? (:traits char) trait)))
 
-(def unconscious? (has-trait? :unconscious))
+;; skills
+(def fighter?       (has-trait? :fighter))
+(def mechanic?      (has-trait? :mechanic))
+(def medic?         (has-trait? :medic))
+;; personality traits
+(def generous?      (has-trait? :generous))
+(def stingy?        (has-trait? :stingy))
+(def trustworthy?   (has-trait? :trustworthy))
+(def untrustworthy? (has-trait? :untrustworthy))
+;; temporary "status effects"
+(def unconscious?   (has-trait? :unconscious))
 
 (defn crew-member-with-trait
   ([trait] #(crew-member-with-trait % trait))
@@ -85,32 +94,8 @@
 (defn current-place [state]
   (get (:places state) (:location state)))
 
-(def gen-local-character
-  (comp gen/gen-character current-place))
-
-(def rand-merchant
-  (comp rand-nth :merchants current-place))
-
-(def rand-export
-  (comp rand-nth :exports current-place))
-
 (defn adjacencies [state loc]
   (:connections (cond->> loc (string? loc) (get (:places state)))))
-
-(defn distance-tiers [state]
-  (let [first-tier (vec (:connections (current-place state)))]
-    (loop [tiers [first-tier]
-           visited (conj (set first-tier) (:location state))]
-      (let [this-tier
-            (->> (last tiers)
-                 (mapcat (comp :connections (:places state)))
-                 (remove visited)
-                 (distinct)
-                 (vec))]
-        (if (empty? this-tier)
-          tiers
-          (recur (conj tiers this-tier)
-                 (into visited this-tier)))))))
 
 (defn pathfind
   ([state to] (pathfind state (:location state) to))
@@ -154,6 +139,40 @@
     :docked? true
     :location (:destination state)
     :recent-picks #{}))
+
+;;; jobs, merchants
+
+(def rand-merchant
+  (comp rand-nth vals :merchants current-place))
+
+(def rand-export
+  (comp rand-nth :exports current-place))
+
+(defn adjust-player-rep
+  ([merchant reason] #(adjust-player-rep % merchant reason))
+  ([state merchant reason]
+    (update-in state [:places (:home merchant) :merchants (:name merchant) :history] conj reason)))
+
+(def base-rep-values
+  {:bought-goods +1
+   :completed-delivery +5
+   :sold-goods +2
+   :refused-repay-fought-collector -20
+   :tried-sell-counterfeit-goods -10})
+
+(defn calc-player-rep [merchant]
+  (let [generous? (has-trait? merchant :generous)
+        stingy?   (has-trait? merchant :stingy)
+        total-rep (reduce +
+                    (for [event (:history merchant)
+                          :let [value (get base-rep-values event)]]
+                      (if (neg? value)
+                        (cond generous? (/ value 2) stingy? (* value 2) :else value)
+                        (cond generous? (* value 2) stingy? (/ value 2) :else value))))]
+    (util/clamp total-rep -50 50)))
+
+(defn will-trust-with-normal-job? [merchant]
+  (> (calc-player-rep merchant) -15))
 
 ;;; cards
 

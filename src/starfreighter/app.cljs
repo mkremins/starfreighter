@@ -5,6 +5,7 @@
             [om-tools.dom :as dom]
             [starfreighter.cards :as cards]
             [starfreighter.db :as db]
+            [starfreighter.desc :as desc]
             [starfreighter.gen :as gen]
             [starfreighter.geom :as geom]
             [starfreighter.util :as util]))
@@ -247,7 +248,6 @@
         :link
           (let [linked (second data)
                 linked (cond->> linked (sequential? linked) (get-in @app-state))]
-            (prn linked)
             (dom/a {:on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
               (:name linked)))
         ;else
@@ -260,7 +260,7 @@
                           (and (:docked? data) (db/current-place data))
                           (get-in data [:places (:destination data)]))]
       (dom/div {:class "info-box"}
-        (for [paragraph (gen/gen-description target)]
+        (for [paragraph (desc/gen-description target)]
           (dom/p (om/build-all info-span paragraph)))))))
 
 (defcomponent app [data owner]

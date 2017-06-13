@@ -8,6 +8,9 @@
        (drop-while (fn [[threshold _]] (> value threshold)))
        first second))
 
+(defn clamp [value lo hi]
+  (-> value (max lo) (min hi)))
+
 ;; from https://github.com/weavejester/medley
 (defn distinct-by
   "Returns a lazy sequence of the elements of coll, removing any elements that
