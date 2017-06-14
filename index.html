@@ -50,18 +50,14 @@
     font-weight: bold;
   }
   .card .speaker:after {
+    color: #eee;
     content: ":";
   }
   .card .speaker:empty:after {
     content: "";
   }
-  .card .speaker.crew {
-    color: lightgreen;
-    cursor: pointer;
-  }
-  .card .speaker.merchant {
-    color: lightblue;
-    cursor: pointer;
+  .card .speaker.crew .info-link {
+    color: lightgreen; /* distinguish when crew are talking vs anyone else */
   }
   .card .game-over {
     font-weight: bold;

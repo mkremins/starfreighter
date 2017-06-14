@@ -42,6 +42,14 @@
         (update :turn inc)
         (dissoc :next-card))))
 
+(defcomponent info-link [data owner]
+  (render [_]
+    (let [linked (cond->> data (sequential? data) (get-in @app-state))]
+      (dom/a {:class "info-link"
+              :on-click #(do (.stopPropagation %)
+                             (om/update! (om/root-cursor app-state) :info-target linked))}
+        (:name linked)))))
+
 (defcomponent content-span [data owner]
   (render [_]
     (if (sequential? data)
@@ -53,11 +61,7 @@
         :subject
           (dom/strong (om/build-all content-span (rest data)))
         :link
-          (let [linked (second data)
-                linked (cond->> linked (sequential? linked) (get-in @app-state))]
-            (dom/a {:class "info-link"
-                    :on-click #(om/update! (om/root-cursor app-state) :info-target linked)}
-              (:name linked)))
+          (om/build info-link (second data))
         ;else
           (dom/span (om/build-all content-span data)))
       (dom/span data))))
@@ -66,11 +70,9 @@
   (render [_]
     (dom/div {:class "card"}
       (let [speaker (:speaker data)
-            role (when-not (string? speaker) (some-> speaker :role name))]
-        (dom/span {:class (str "speaker " role)
-                   :on-click (when role
-                               #(om/update! (om/root-cursor app-state) :info-target speaker))}
-          (cond-> speaker (not (string? speaker)) :name)))
+            role (some-> speaker :role name)]
+        (dom/span {:class (str "speaker " role)}
+          (if role (om/build info-link speaker) (:name speaker))))
       " "
       (om/build content-span (:text data))
       (when (= (:type data) :game-over)
@@ -114,10 +116,7 @@
     (dom/p {:class "slot crew"}
       (if data
         (dom/span {}
-          (dom/a {:class "info-link"
-                  :on-click #(do (.stopPropagation %)
-                                 (om/update! (om/root-cursor app-state) :info-target data))}
-            (:name data))
+          (om/build info-link data)
           (let [traits (:traits data)
                 icons  {:fighter "👊"
                         :medic "💊"
@@ -145,14 +144,7 @@
           (:name data)
           (let [dest (:destination data)]
             (if dest
-              (dom/span {} " ➡️ "
-                (dom/a {:class "info-link"
-                        :on-click
-                        (fn [ev]
-                          (.stopPropagation ev)
-                          (om/transact! (om/root-cursor app-state) []
-                            #(assoc % :info-target (get-in % [:places dest]))))}
-                  dest))
+              (dom/span {} " ➡️ " (om/build info-link [:places dest]))
               "")))
         " "))))
 
