@@ -55,7 +55,7 @@
                              (= (:destination %) (:location state)))
                        (:cargo state))]
         {:type :info
-         :speaker (rand-nth (:crew state))
+         :speaker (db/rand-crew-member state)
          :text "I’ll go drop off the goods we’re supposed to deliver."
          :ok (comp #(assoc % :cargo (vec keeping))
                    (db/adjust-stat :cash (reduce + (map :pay dropping)))

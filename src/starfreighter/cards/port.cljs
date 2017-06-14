@@ -323,8 +323,7 @@
         (let [speaker (db/rand-crew-member state)
               patron  (assoc (gen/gen-local-character state) :name "Rowdy Bar Patron")
               your-side-active?
-              (fn [{:keys [crew]}]
-                (some (complement db/unconscious?) crew))
+              #(some (complement db/unconscious?) (db/crew %))
               their-side-active?
               (fn [{:keys [fight-info]}]
                 (some (complement db/unconscious?) (vals (:opponents fight-info))))
@@ -338,15 +337,14 @@
                           :speaker last-hitter
                           :text ["That’ll teach you to mess with " (:name last-hitter) "! "
                                  "C’mon, Cap’n, let’s get outta here."]
-                          :ok #(-> % (dissoc :fight-info)
-                                     (db/unset-deck)
-                                     (db/adjust-stat :crew +5)
-                                     (update :crew
-                                       (partial mapv
-                                         (fn [c]
-                                           (cond-> c (db/unconscious? c)
-                                             (-> (update :traits disj :unconscious)
-                                                 (update :traits conj :injured)))))))}))}
+                          :ok (apply comp
+                                #(dissoc % :fight-info)
+                                db/unset-deck
+                                (db/adjust-stat :crew +5)
+                                (for [c (db/crew state) :when (db/has-trait? c :unconscious)]
+                                  (db/update-crew c
+                                    (comp (db/drop-trait :unconscious)
+                                          (db/add-trait :injured)))))}))}
 
                {:id :they-win
                 :prereq (every-pred their-side-active? (complement your-side-active?))
@@ -360,8 +358,8 @@
                 :repeatable? true
                 :prereq (every-pred your-side-active? their-side-active?)
                 :weight (constantly 1)
-                :gen (fn [{:keys [crew fight-info] :as state}]
-                       (let [hitter (rand-nth (remove db/unconscious? crew))
+                :gen (fn [{:keys [fight-info] :as state}]
+                       (let [hitter (rand-nth (remove db/unconscious? (db/crew state)))
                              target (rand-nth (remove db/unconscious? (vals (:opponents fight-info))))]
                          {:type :info
                           :text [(:shortname hitter) " hits one of your assailants with a "
@@ -376,17 +374,15 @@
                 :repeatable? true
                 :prereq (every-pred your-side-active? their-side-active?)
                 :weight (constantly 1)
-                :gen (fn [{:keys [crew fight-info] :as state}]
+                :gen (fn [{:keys [fight-info] :as state}]
                        (let [hitter (rand-nth (remove db/unconscious? (vals (:opponents fight-info))))
-                             target (rand-nth (remove db/unconscious? crew))]
+                             target (rand-nth (remove db/unconscious? (db/crew state)))]
                          {:type :info
                           :text ["One of your assailants hits " (:shortname target) " with a "
                                  (rand-nth ["bottle" "chair" "pitcher" "table leg"])
                                  ", knocking them to the ground. It doesn’t look like they’ll be "
                                  "getting up any time soon."]
-                          :ok (fn [state]
-                                (update state :crew
-                                  (partial mapv #(cond-> % (= % target) (update :traits conj :unconscious)))))
+                          :ok (db/update-crew target (db/add-trait :unconscious))
                           :icon "💥"}))}]
               bar-fight
               {:type :info
@@ -514,12 +510,12 @@
 
 {:id :info-crew-home
  :prereq (fn [state]
-           (and (some #(= (:home %) (:location state)) (:crew state))
+           (and (some #(= (:home %) (:location state)) (db/crew state))
                 (not (contains? (:recent-picks state) :offer-join-crew))))
  :weight (constantly 4)
  :gen (fn [state]
         {:type :info
-         :speaker (rand-nth (filter #(= (:home %) (:location state)) (:crew state)))
+         :speaker (rand-nth (filter #(= (:home %) (:location state)) (db/crew state)))
          :text ["Y’know, Cap’n, I never thought I’d say this, but it’s actually "
                 "kind of nice to " (rand-nth ["see" "visit"]) " "
                 (rand-nth ["home" "my home planet" "my old home planet"])
@@ -549,7 +545,7 @@
                       "to clear the debt and keep you out of indentured servitude "
                       "to " (:name lender) "."]}
               fight-outcome
-              (let [fight-score (reduce + (map #(if (db/fighter? %) 2 1) (:crew state)))
+              (let [fight-score (reduce + (map #(if (db/fighter? %) 2 1) (db/crew state)))
                     enemy-fight-score (rand/rand-int* 2 5)
                     fighter-if-any (db/crew-member-with-trait state :fighter)]
                 (cond

@@ -54,7 +54,7 @@
                  :speaker mechanic
                  :text "Hah! Toldja I was up to the task."
                  :ok (db/adjust-stat :crew +10)}
-                (let [speaker (or (first (filter #(not= % mechanic) (shuffle (:crew state)))) mechanic)]
+                (let [speaker (or (first (filter #(not= % mechanic) (shuffle (db/crew state)))) mechanic)]
                   {:type :info
                    :speaker speaker
                    :text (if (= speaker mechanic)
@@ -89,7 +89,7 @@
                (not (contains? (:recent-picks %) :info-crew-unfriendly)))
  :weight #(if (>= (:crew (:stats %)) 60) 4 2)
  :gen (fn [state]
-        (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
+        (let [[crew-1 crew-2] (rand/pick-n 2 (db/crew state))]
           {:type :info
            :speaker crew-1
            :text ["Y’know, Cap’n, " (:shortname crew-2) " and I don’t always "
@@ -125,7 +125,7 @@
                (not (contains? (:recent-picks %) :info-crew-friendly)))
  :weight #(if (<= (:crew (:stats %)) 40) 4 2)
  :gen (fn [state]
-        (let [[crew-1 crew-2] (rand/pick-n 2 (:crew state))]
+        (let [[crew-1 crew-2] (rand/pick-n 2 (db/crew state))]
           {:type :info
            :speaker crew-1
            :text ["I can’t stand it anymore. " (:shortname crew-2) " "
@@ -138,7 +138,7 @@
  :weight (constantly 2)
  :gen (fn [state]
         {:type :info
-         :speaker (first (:crew state))
+         :speaker (first (db/crew state))
          :text ["Kinda " (rand-nth ["lonely" "quiet"]) " around here, isn’t it, Cap’n? "
                 "I’m starting to think maybe we should hire on another crew member just for the company."]
          :ok (db/adjust-stat :crew -2)})}

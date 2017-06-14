@@ -31,14 +31,17 @@
   (update state :cargo conj cargo))
 
 (defcurried add-crew [state char]
-  (update state :crew conj (assoc char :role :crew)))
+  (update state :crew assoc (:name char) (assoc char :role :crew)))
 
 (defcurried drop-cargo [state cargo]
   ;; TODO will cheat people out of duplicates if they have any
   (update state :cargo (comp vec (partial remove #{cargo}))))
 
 (defcurried drop-crew [state char]
-  (update state :crew (comp vec (partial remove #{char}))))
+  (update state :crew dissoc (:name char)))
+
+(defn crew [state]
+  (vals (:crew state)))
 
 (defn passengers [state]
   (filter :passenger? (:cargo state)))
@@ -60,6 +63,16 @@
 (defcurried has-trait? [char trait]
   (contains? (:traits char) trait))
 
+(defcurried add-trait [char trait]
+  (update char :traits conj trait))
+
+(defcurried drop-trait [char trait]
+  (update char :traits disj trait))
+
+(defcurried update-crew [state crew f]
+  ;; TODO would love to add an `& args` at the end but can't have multiple variadic clauses
+  (update-in state [:crew (:name crew)] f))
+
 ;; skills
 (def fighter?       (has-trait? :fighter))
 (def mechanic?      (has-trait? :mechanic))
@@ -73,10 +86,10 @@
 (def unconscious?   (has-trait? :unconscious))
 
 (defcurried crew-member-with-trait [state trait]
-  (first (filter (has-trait? trait) (:crew state))))
+  (first (filter (has-trait? trait) (crew state))))
 
-(defn rand-crew-member [state]
-  (rand-nth (:crew state)))
+(def rand-crew-member
+  (comp rand-nth crew))
 
 ;;; places, the map
 

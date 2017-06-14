@@ -15,8 +15,9 @@
 (defn restart-game [& _]
   (let [places (gen/gen-places)
         place (get places (rand-nth (keys places)))
+        crew  (repeatedly 2 #(gen/gen-character place :crew))
         state {:stats {:cash 40 :ship 40 :crew 40}
-               :crew [(gen/gen-character place :crew) (gen/gen-character place :crew)]
+               :crew (util/indexed-by :name crew)
                :cargo []
                :max-crew 3
                :max-cargo 6
@@ -132,9 +133,10 @@
   (render [_]
     (dom/div {:class "list crew"}
       (dom/h2 "Crew")
-      (dom/div {}
-        (for [i (range (:max-crew data))]
-          (om/build crew-slot (get (:crew data) i)))))))
+      (let [crew (vec (vals (:crew data)))]
+        (dom/div {}
+          (for [i (range (:max-crew data))]
+            (om/build crew-slot (get crew i))))))))
 
 (defcomponent cargo-slot [data owner]
   (render [_]
