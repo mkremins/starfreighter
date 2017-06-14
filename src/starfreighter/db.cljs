@@ -1,21 +1,17 @@
 (ns starfreighter.db
   (:require [starfreighter.rand :as rand]
-            [starfreighter.util :as util]))
+            [starfreighter.util :as util :refer-macros [defcurried]]))
 
 ;;; stats
 
-(defn has-at-least?
-  ([stat amount] #(has-at-least? % stat amount))
-  ([state stat amount] (>= (get-in state [:stats stat]) amount)))
+(defcurried has-at-least? [state stat amount]
+  (>= (get-in state [:stats stat]) amount))
 
-(defn has-at-most?
-  ([stat amount] #(has-at-most? % stat amount))
-  ([state stat amount] (<= (get-in state [:stats stat]) amount)))
+(defcurried has-at-most? [state stat amount]
+  (<= (get-in state [:stats stat]) amount))
 
-(defn adjust-stat
-  ([stat amount] #(adjust-stat % stat amount))
-  ([state stat amount]
-    (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100))))
+(defcurried adjust-stat [state stat amount]
+  (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100)))
 
 ;;; cargo, passengers, crew
 
@@ -31,23 +27,18 @@
 (def can-hold-more-crew?
   (comp pos? open-crew-slots))
 
-(defn add-cargo
-  ([cargo] #(add-cargo % cargo))
-  ([state cargo] (update state :cargo conj cargo)))
+(defcurried add-cargo [state cargo]
+  (update state :cargo conj cargo))
 
-(defn add-crew
-  ([char] #(add-crew % char))
-  ([state char] (update state :crew conj (assoc char :role :crew))))
+(defcurried add-crew [state char]
+  (update state :crew conj (assoc char :role :crew)))
 
-(defn drop-cargo
-  ([cargo] #(drop-cargo % cargo))
-  ([state cargo]
-    ;; TODO will cheat people out of duplicates if they have any
-    (update state :cargo (comp vec (partial remove #{cargo})))))
+(defcurried drop-cargo [state cargo]
+  ;; TODO will cheat people out of duplicates if they have any
+  (update state :cargo (comp vec (partial remove #{cargo}))))
 
-(defn drop-crew
-  ([char] #(drop-crew % char))
-  ([state char] (update state :crew (comp vec (partial remove #{char})))))
+(defcurried drop-crew [state char]
+  (update state :crew (comp vec (partial remove #{char}))))
 
 (defn passengers [state]
   (filter :passenger? (:cargo state)))
@@ -66,9 +57,8 @@
 (defn has-freely-sellable-cargo? [state]
   (some freely-sellable? (:cargo state)))
 
-(defn has-trait?
-  ([trait] #(has-trait? % trait))
-  ([char trait] (contains? (:traits char) trait)))
+(defcurried has-trait? [char trait]
+  (contains? (:traits char) trait))
 
 ;; skills
 (def fighter?       (has-trait? :fighter))
@@ -82,9 +72,8 @@
 ;; temporary "status effects"
 (def unconscious?   (has-trait? :unconscious))
 
-(defn crew-member-with-trait
-  ([trait] #(crew-member-with-trait % trait))
-  ([state trait] (first (filter (has-trait? trait) (:crew state)))))
+(defcurried crew-member-with-trait [state trait]
+  (first (filter (has-trait? trait) (:crew state))))
 
 (defn rand-crew-member [state]
   (rand-nth (:crew state)))
@@ -126,13 +115,11 @@
            (first)
            (second)))))
 
-(defn depart-for
-  ([dest] #(depart-for % dest))
-  ([state dest]
-    (assoc state
-      :docked? false
-      :destination dest
-      :recent-picks #{})))
+(defcurried depart-for [state dest]
+  (assoc state
+    :docked? false
+    :destination dest
+    :recent-picks #{}))
 
 (defn arrive [state]
   (assoc state
@@ -148,10 +135,8 @@
 (def rand-export
   (comp rand-nth :exports current-place))
 
-(defn adjust-player-rep
-  ([merchant reason] #(adjust-player-rep % merchant reason))
-  ([state merchant reason]
-    (update-in state [:places (:home merchant) :merchants (:name merchant) :history] conj reason)))
+(defcurried adjust-player-rep [state merchant reason]
+  (update-in state [:places (:home merchant) :merchants (:name merchant) :history] conj reason))
 
 (def base-rep-values
   {:bought-goods +1
@@ -176,13 +161,11 @@
 
 ;;; cards
 
-(defn set-next-card
-  ([card] #(set-next-card % card))
-  ([state card] (assoc state :next-card card)))
+(defcurried set-next-card [state card]
+  (assoc state :next-card card))
 
-(defn set-deck
-  ([deck] #(set-deck % deck))
-  ([state deck] (assoc state :deck deck)))
+(defcurried set-deck [state deck]
+  (assoc state :deck deck))
 
 (defn unset-deck [state]
   (dissoc state :deck))
