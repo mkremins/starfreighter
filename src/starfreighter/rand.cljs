@@ -80,39 +80,15 @@
   [f n gen & args]
   (take n (util/distinct-by f (repeatedly #(apply gen args)))))
 
-(defn weighted-pool
-  "Returns a pool in which each key from the map `choices-with-weights` appears
-  exactly N times, where N is the integer value associated with that key."
-  [choices-with-weights]
-  (->> choices-with-weights
-       (map #(repeat (val %) (key %)))
-       (reduce into [])))
-
 (defn weighted-choice
   "Randomly selects a key from the map `choices-with-weights`. The likelihood
   that a given key will be selected is determined by its weight, i.e. its
-  associated integer value in the map."
+  associated non-negative numeric value in the map."
   [choices-with-weights]
-  (rand-nth (weighted-pool choices-with-weights)))
-
-(comment
-  ;; like weighted-choice, but returns a generator fn.
-  ;; saves work restructuring choices-with-weights into a pool
-  ;; if you use the same gen repeatedly.
-  (defn weighted-gen [choices-with-weights]
-    (let [pool (weighted-pool choices-with-weights)]
-      #(rand-nth pool)))
-
-  ;; like weighted-gen, but maybe faster?
-  ;; haven't actually tested so not sure.
-  (defn weighted-gen [choices-with-weights]
-    (let [total-weight (reduce + (vals choices-with-weights))
-          choices-with-thresholds
-          (reduce (fn [choices-with-thresholds [choice weight]]
-                    (let [threshold (+ weight (or (val (peek choices-with-thresholds)) 0))]
-                      (conj choices-with-thresholds [choice threshold])))
-                  [] (seq choices-with-weights))]
-      (fn []
-        (let [r (rand-int total-weight)]
-          (->> choices-with-thresholds (filter #(< r (val %))) first key)))))
-)
+  (let [choices-with-thresholds
+        (reduce (fn [choices-with-thresholds [choice weight]]
+                  (let [threshold (+ weight (or (some-> choices-with-thresholds peek val) 0))]
+                    (conj choices-with-thresholds [choice threshold])))
+                [] (seq choices-with-weights))
+        r (* (rand) (val (peek choices-with-thresholds)))]
+    (->> choices-with-thresholds (filter #(< r (val %))) first key)))
