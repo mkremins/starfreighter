@@ -5,9 +5,10 @@
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
-(def all-cards
-  (into (mapv #(update % :prereq (partial every-pred :docked?)) port/cards)
-        (mapv #(update % :prereq (partial every-pred (complement :docked?))) space/cards)))
+(let [combine-preds #(cond-> %1 %2 (every-pred %2))]
+  (def all-cards
+    (into (mapv #(update % :prereq (partial combine-preds :docked?)) port/cards)
+          (mapv #(update % :prereq (partial combine-preds (complement :docked?))) space/cards))))
 
 (defn interruptible?
   "Returns whether a given `card` is interruptible – i.e. whether it's OK (both
@@ -27,7 +28,7 @@
     (assoc state :card
       {:type :yes-no
        :interruptible? false
-       :speaker (db/rand-crew-member state)
+       :speaker (db/some-crew state)
        :text ["Oh, we’re leaving for " (:name dest) " already? Guess I’ll go fire up the engine!"]
        :yes (db/depart-for (second (db/pathfind state dest)))
        :no identity})))
@@ -55,13 +56,13 @@
                              (= (:destination %) (:location state)))
                        (:cargo state))]
         {:type :info
-         :speaker (db/rand-crew-member state)
+         :speaker (db/some-crew state)
          :text "I’ll go drop off the goods we’re supposed to deliver."
-         :ok (comp #(assoc % :cargo (vec keeping))
-                   (db/adjust-stat :cash (reduce + (map :pay dropping)))
-                   (apply comp
-                     (for [{:keys [merchant]} dropping :when merchant]
-                       (db/adjust-player-rep merchant :completed-delivery))))})
+         :ok [#(assoc % :cargo (vec keeping))
+              (db/earn (reduce + (map :pay dropping)))
+              (apply comp
+                (for [{:keys [merchant]} dropping :when merchant]
+                  (db/add-memory merchant :completed-delivery)))]})
     ;; drop off passengers you're supposed to deliver
     (db/has-passengers-to-drop? state)
       (let [[dropping keeping]
@@ -73,18 +74,28 @@
          :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
          :ok #(assoc % :cargo (vec keeping))})))
 
-(defn can-pick? [state metacard]
-  (and (or (:repeatable? metacard)
-           (not (contains? (:recent-picks state) (:id metacard))))
-       ((:prereq metacard) state)))
+(defn try-pick [state metacard]
+  (when (and (or (:repeatable? metacard)
+                 (not (contains? (:recent-picks state) (:id metacard))))
+             ((:prereq metacard (constantly true)) state))
+    (loop [pairs (:bind metacard)
+           bindings {}]
+      (if-let [[k f] (first pairs)]
+        (let [v (f (assoc state :bound bindings))]
+          (when-not (nil? v)
+            (recur (rest pairs) (assoc bindings k v))))
+        (assoc metacard :bound bindings)))))
 
 (defn draw-next-card [state]
   (or (applicable-game-over-if-any state)
       (applicable-arrival-if-any state)
       (:next-card state)
       (let [deck     (or (:deck state) all-cards)
-            pickable (filter (partial can-pick? state) deck)
-            weights  (zipmap pickable (map #((:weight %) state) pickable))
-            metacard (rand/weighted-choice weights)]
-        (prn (:id metacard))
-        (assoc ((:gen metacard) state) :id (:id metacard)))))
+            pickable (filter identity (map (partial try-pick state) deck))
+            {:keys [bound gen id]}
+            (rand/weighted-choice
+              (->> pickable
+                   (map #((:weight %) (assoc state :bound (:bound %))))
+                   (zipmap pickable)))]
+        (prn id)
+        (assoc (gen (assoc state :bound bound)) :id id))))

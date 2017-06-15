@@ -4,6 +4,16 @@
 
 ;;; stats
 
+(defcurried can-afford? [state amount]
+  (>= (get-in state [:stats :cash]) amount))
+
+(defcurried earn [state amount]
+  (update-in state [:stats :cash] #(+ % (js/Math.abs amount))))
+
+(defcurried pay [state amount]
+  (update-in state [:stats :cash] #(- % (js/Math.abs amount))))
+
+
 (defcurried has-at-least? [state stat amount]
   (>= (get-in state [:stats stat]) amount))
 
@@ -13,65 +23,28 @@
 (defcurried adjust-stat [state stat amount]
   (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100)))
 
-;;; cargo, passengers, crew
 
-(defn open-cargo-slots [state]
-  (- (:max-cargo state) (count (:cargo state))))
 
-(defn open-crew-slots [state]
-  (- (:max-crew state) (count (:crew state))))
 
-(def can-hold-more-cargo?
-  (comp pos? open-cargo-slots))
 
-(def can-hold-more-crew?
-  (comp pos? open-crew-slots))
 
-(defcurried add-cargo [state cargo]
-  (update state :cargo conj cargo))
+;;; characters
 
-(defcurried add-crew [state char]
-  (update state :crew assoc (:name char) (assoc char :role :crew)))
+(defcurried remember-char [state char]
+  (assoc-in state [:chars (:id char)] char))
 
-(defcurried drop-cargo [state cargo]
-  ;; TODO will cheat people out of duplicates if they have any
-  (update state :cargo (comp vec (partial remove #{cargo}))))
+(defcurried forget-char [state char]
+  (update state :chars dissoc (:id char)))
 
-(defcurried drop-crew [state char]
-  (update state :crew dissoc (:name char)))
+(defn ->char [state char-or-id]
+  (cond->> char-or-id (number? char-or-id) (get-in state [:chars char-or-id])))
 
-(defn crew [state]
-  (vals (:crew state)))
-
-(defn passengers [state]
-  (filter :passenger? (:cargo state)))
-
-(defn has-cargo-to-drop? [state]
-  (some #(and (not (:passenger? %))
-              (= (:destination %) (:location state)))
-        (:cargo state)))
-
-(defn has-passengers-to-drop? [state]
-  (some #(= (:destination %) (:location state)) (passengers state)))
-
-(defn freely-sellable? [cargo]
-  (not (or (:passenger? cargo) (:destination cargo))))
-
-(defn has-freely-sellable-cargo? [state]
-  (some freely-sellable? (:cargo state)))
+(defcurried update-char [state char f]
+  ;; would love to add `& args` at the end, but can't have multiple variadic clauses :(
+  (update-in state [:chars (:id char)] f))
 
 (defcurried has-trait? [char trait]
   (contains? (:traits char) trait))
-
-(defcurried add-trait [char trait]
-  (update char :traits conj trait))
-
-(defcurried drop-trait [char trait]
-  (update char :traits disj trait))
-
-(defcurried update-crew [state crew f]
-  ;; TODO would love to add an `& args` at the end but can't have multiple variadic clauses
-  (update-in state [:crew (:name crew)] f))
 
 ;; skills
 (def fighter?       (has-trait? :fighter))
@@ -85,11 +58,117 @@
 ;; temporary "status effects"
 (def unconscious?   (has-trait? :unconscious))
 
-(defcurried crew-member-with-trait [state trait]
-  (first (filter (has-trait? trait) (crew state))))
+(defcurried add-trait* [char trait]
+  (update char :traits conj trait))
 
-(def rand-crew-member
-  (comp rand-nth crew))
+(defcurried drop-trait* [char trait]
+  (update char :traits disj trait))
+
+(defcurried add-memory* [char memory]
+  (update char :memories conj memory))
+
+(defcurried add-trait [state char trait]
+  (update-char state char (add-trait* trait)))
+
+(defcurried drop-trait [state char trait]
+  (update-char state char (drop-trait* trait)))
+
+(defcurried add-memory [state char memory]
+  (update-char state char (add-memory* memory)))
+
+(def base-mood-values
+  {;; crew
+   :hired +10
+   :gave-bonus +10
+   :declined-bonus-request -5
+   :declined-depart-request -5
+   :backed-down-from-bar-fight -5
+   :won-bar-fight +5
+   :won-collector-fight +15
+   :went-gambling-did-poorly +5
+   :went-gambling-broke-even +10
+   :went-gambling-did-well +15
+   :crewmate-resigned +5
+   :visited-home +5
+   :fixed-engine +10
+   :failed-to-fix-engine -10
+   :witnessed-failure -10
+   :ran-out-of-cash -15
+   :was-reassured-about-cash +5
+   :got-along-with-crewmate +5
+   :was-annoyed-by-crewmate -10
+   :annoyed-crewmate -5
+   :felt-lonely -5
+   :was-annoyed-by-passenger -10
+   :was-inconvenienced-by-passenger -5
+   ;; merchants
+   :bought-goods +1
+   :completed-delivery +5
+   :sold-goods +2
+   :refused-repay-fought-collector -20
+   :tried-sell-counterfeit-goods -10})
+
+(defn calc-mood [char]
+  (let [generous?  (generous? char)
+        stingy?    (stingy? char)
+        total-mood (reduce + 50
+                     (for [memory (:memories char)
+                           :let [value (get base-mood-values memory)
+                                 _     (assert value)]]
+                       (if (neg? value)
+                         (cond generous? (/ value 2) stingy? (* value 2) :else value)
+                         (cond generous? (* value 2) stingy? (/ value 2) :else value))))]
+    (util/clamp total-mood 0 100)))
+
+(defcurried mood-at-least? [char amount]
+  (>= (calc-mood char) amount))
+
+(defcurried mood-at-most? [char amount]
+  (<= (calc-mood char) amount))
+
+
+;;; crew
+
+(defn open-crew-slots [state]
+  (- (:max-crew state) (count (:crew state))))
+
+(def can-hold-more-crew?
+  (comp pos? open-crew-slots))
+
+(defcurried add-crew [state char]
+  (-> state
+      (remember-char (assoc char :role :crew))
+      (add-memory char :hired)
+      (update :crew conj (:id char))))
+
+(defcurried drop-crew [state char]
+  (-> state
+      (forget-char char) ;; ok for now, but will probably want to hang onto ex-crew later
+      (update :crew disj (:id char))))
+
+(defn crew [state]
+  (map (partial ->char state) (:crew state)))
+
+(defcurried some-crew-where [state pred]
+  (let [passing (filter pred (crew state))]
+    (when (> (count passing) 0) (rand-nth passing))))
+
+(def some-crew
+  (some-crew-where identity))
+
+(defcurried some-crew-preferably [state pred]
+  (or (some-crew-where state pred) (some-crew state)))
+
+(defn avg-crew-mood [state]
+  (let [crew (crew state)]
+    (/ (reduce + (map calc-mood crew)) (count crew))))
+
+(defcurried update-all-crew [state f]
+  (reduce (fn [state crew] (update-char state crew f)) state (crew state)))
+
+(defcurried add-whole-crew-memory [state memory]
+  (update-all-crew state (add-memory* memory)))
+
 
 ;;; places, the map
 
@@ -140,37 +219,71 @@
     :location (:destination state)
     :recent-picks #{}))
 
+(defcurried from? [char place]
+  (= (:home char) (:name place)))
+
+(defcurried import? [item place]
+  (contains? (:imports place) (cond-> item (map? item) :name)))
+
+
+;;; cargo, passengers
+
+(defn open-cargo-slots [state]
+  (- (:max-cargo state) (count (:cargo state))))
+
+(def can-hold-more-cargo?
+  (comp pos? open-cargo-slots))
+
+(defcurried add-cargo [state cargo]
+  (update state :cargo conj cargo))
+
+(defcurried drop-cargo [state cargo]
+  ;; TODO will cheat people out of duplicates if they have any
+  (update state :cargo (comp vec (partial remove #{cargo}))))
+
+(defn passengers [state]
+  (filter :passenger? (:cargo state)))
+
+(defn some-passenger [state]
+  (let [passengers (passengers state)]
+    (when (> (count passengers) 1) (rand-nth passengers))))
+
+(defn has-cargo-to-drop? [state]
+  (some #(and (not (:passenger? %))
+              (= (:destination %) (:location state)))
+        (:cargo state)))
+
+(defn has-passengers-to-drop? [state]
+  (some #(= (:destination %) (:location state)) (passengers state)))
+
+(defn freely-sellable? [cargo]
+  (not (or (:passenger? cargo) (:destination cargo))))
+
+(defn has-freely-sellable-cargo? [state]
+  (some freely-sellable? (:cargo state)))
+
+(defn some-sellable-cargo [state]
+  (let [cargo (->> (:cargo state)
+                   (filter freely-sellable?)
+                   (remove #(contains? (:exports (current-place state)) (:name %))))]
+    (when (> (count cargo) 0) (rand-nth cargo))))
+
+
 ;;; jobs, merchants
 
-(def rand-merchant
-  (comp rand-nth vals :merchants current-place))
+(defn merchants [state]
+  (map (partial ->char state) (:merchants (current-place state))))
 
 (def rand-export
   (comp rand-nth :exports current-place))
 
-(defcurried adjust-player-rep [state merchant reason]
-  (update-in state [:places (:home merchant) :merchants (:name merchant) :history] conj reason))
-
-(def base-rep-values
-  {:bought-goods +1
-   :completed-delivery +5
-   :sold-goods +2
-   :refused-repay-fought-collector -20
-   :tried-sell-counterfeit-goods -10})
-
-(defn calc-player-rep [merchant]
-  (let [generous? (has-trait? merchant :generous)
-        stingy?   (has-trait? merchant :stingy)
-        total-rep (reduce +
-                    (for [event (:history merchant)
-                          :let [value (get base-rep-values event)]]
-                      (if (neg? value)
-                        (cond generous? (/ value 2) stingy? (* value 2) :else value)
-                        (cond generous? (* value 2) stingy? (/ value 2) :else value))))]
-    (util/clamp total-rep -50 50)))
-
 (defn will-trust-with-normal-job? [merchant]
-  (> (calc-player-rep merchant) -15))
+  (> (calc-mood merchant) -15))
+
+(defn some-trusting-merchant [state]
+  (let [merchants (filter will-trust-with-normal-job? (merchants state))]
+    (when (> (count merchants) 0) (rand-nth merchants))))
+
 
 ;;; cards
 

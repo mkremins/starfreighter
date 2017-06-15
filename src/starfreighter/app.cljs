@@ -13,28 +13,17 @@
 (enable-console-print!)
 
 (defn restart-game [& _]
-  (let [places (gen/gen-places)
-        place (get places (rand-nth (keys places)))
-        crew  (repeatedly 2 #(gen/gen-character place :crew))
-        state {:stats {:cash 40 :ship 40 :crew 40}
-               :crew (util/indexed-by :name crew)
-               :cargo []
-               :max-crew 3
-               :max-cargo 6
-               :places places
-               :docked? true
-               :location (:name place)
-               :turn 0
-               :recent-picks #{:offer-join-crew}} ; to simulate having just "hired" starting crew
-        card (cards/draw-next-card state)]
+  (let [state (gen/gen-init-state)
+        card  (cards/draw-next-card state)]
     (-> state (assoc :card card)
-              (update :recent-picks conj (:id card)))))
+              (update :recent-picks (fnil conj #{}) (:id card)))))
 
 (defonce app-state
   (atom (restart-game)))
 
 (defn handle-choice [decision state]
   (let [update-fn (get-in state [:card decision])
+        update-fn (cond->> update-fn (vector? update-fn) (apply comp))
         state' (update-fn state)
         card (cards/draw-next-card state')]
     (-> state'
@@ -105,7 +94,7 @@
       (let [crew-icon
             (util/bucket (:crew data)
               [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]])]
-        (for [[stat icon] [[:cash "💰"] [:ship "🚀"] [:crew crew-icon]]]
+        (for [[stat icon] [[:cash "💰"] [:ship "🚀"]]]
           (dom/div {:class (str "stat " (name stat))}
             (dom/div {:class "stat-label"} icon)
             (dom/div {:class "stat-bar"}
@@ -119,21 +108,22 @@
         (dom/span {}
           (om/build info-link data)
           (let [traits (:traits data)
+                mood   (util/bucket (db/calc-mood data)
+                         [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]])
                 icons  {:fighter "👊"
                         :medic "💊"
                         :mechanic "🔧"
                         :unconscious "😵"
                         :injured "🤕"
                         :sick "🤒"}]
-            (when (pos? (count traits))
-              (str " " (str/join (map icons traits))))))
+            (str mood (str/join (map icons traits)))))
         " "))))
 
 (defcomponent crew-list [data owner]
   (render [_]
     (dom/div {:class "list crew"}
       (dom/h2 "Crew")
-      (let [crew (vec (vals (:crew data)))]
+      (let [crew (vec (db/crew data))]
         (dom/div {}
           (for [i (range (:max-crew data))]
             (om/build crew-slot (get crew i))))))))

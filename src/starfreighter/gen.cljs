@@ -8,6 +8,12 @@
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
+(let [next-id (atom 0)]
+  (defn- gen-id []
+    (let [id @next-id]
+      (swap! next-id inc)
+      id)))
+
 ;;; characters
 
 (def nicknames
@@ -71,7 +77,8 @@
           [fname lname] (map str/capitalize (rand/unique-runs 2 lang/gen-word lang))
           nick (gen-nickname fname lname)
           nick-only? (and nick (rand/chance 1 4))]
-      {:type :char
+      {:id (gen-id)
+       :type :char
        :name
        (->> [(when-not nick-only? fname) (when nick (str "“" nick "”")) lname]
             (filter identity)
@@ -80,7 +87,7 @@
        :traits    (gen-traits)
        :home      (:name place)
        :culture   (:name lang)
-       :history   []}))
+       :memories  []}))
   ([place role]
     (assoc (gen-character place) :role role)))
 
@@ -117,26 +124,31 @@
         (db/stingy? payer)   (rand/rand-int* 2 3)
         :else                (rand/rand-int* 3 4)))
 
+(defn rand-base-price [seller]
+  ;; TODO bump up somewhat if high trust?
+  (cond (db/generous? seller) (rand/rand-int* 4 5)
+        (db/stingy? seller)   (rand/rand-int* 6 7)
+        :else                 (rand/rand-int* 5 6)))
+
 (defn gen-normal-delivery-job [state]
-  (let [[dest dist] (rand-dest-with-dist state)
-        place       (db/current-place state)
-        merchant    (->> place :merchants vals (filter db/will-trust-with-normal-job?) shuffle first)
-        rep         (db/calc-player-rep merchant)
-        real-pay    (* (rand-base-pay merchant) dist)
-        split-pay?  (cond (db/stingy? merchant) false
-                          (and (db/generous? merchant) (>= rep 0)) true
-                          (<= rep 0)  false
-                          (<= rep 10) (rand/weighted-choice {true 1 false 5})
-                          (<= rep 20) (rand/weighted-choice {true 2 false 4})
-                          (<= rep 30) (rand/weighted-choice {true 3 false 3})
-                          (<= rep 40) (rand/weighted-choice {true 4 false 2})
-                          (<= rep 50) (rand/weighted-choice {true 5 false 1}))]
-    {:name        (rand-nth (:exports place))
-     :destination dest
-     :distance    dist
-     :merchant    merchant
-     :pay-before  (if split-pay? (/ real-pay 2) 0)
-     :pay-after   (if split-pay? (/ real-pay 2) real-pay)}))
+  (when-let [merchant (db/some-trusting-merchant state)]
+    (let [[dest dist] (rand-dest-with-dist state)
+          rep         (db/calc-mood merchant)
+          real-pay    (* (rand-base-pay merchant) dist)
+          split-pay?  (cond (db/stingy? merchant) false
+                            (and (db/generous? merchant) (>= rep 0)) true
+                            (<= rep 0)  false
+                            (<= rep 10) (rand/weighted-choice {true 1 false 5})
+                            (<= rep 20) (rand/weighted-choice {true 2 false 4})
+                            (<= rep 30) (rand/weighted-choice {true 3 false 3})
+                            (<= rep 40) (rand/weighted-choice {true 4 false 2})
+                            (<= rep 50) (rand/weighted-choice {true 5 false 1}))]
+      {:name        (rand-nth (:exports (db/current-place state)))
+       :destination dest
+       :distance    dist
+       :merchant    merchant
+       :pay-before  (if split-pay? (/ real-pay 2) 0)
+       :pay-after   (if split-pay? (/ real-pay 2) real-pay)})))
 
 (defn gen-passenger-delivery-job [state]
   (let [[dest dist] (rand-dest-with-dist state)
@@ -146,6 +158,18 @@
       :distance    dist
       :passenger?  true
       :pay-before  (* (rand-base-pay passenger) dist))))
+
+(defn gen-goods-for-sale [state]
+  (when-let [seller (db/some-trusting-merchant state)]
+    (let [stuff (db/rand-export state)]
+      {:name   stuff
+       :seller seller
+       :price  (* 3 (rand-base-price seller))
+       :counterfeit?
+       (rand/weighted-choice
+         (cond (db/trustworthy? seller) {true 1 false 4}
+               (db/untrustworthy? seller) {true 4 false 1}
+               :else {true 1 false 2}))})))
 
 ;;; places
 
@@ -159,9 +183,7 @@
                    :exports exports
                    :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                    :language lang}
-        merchants (->> (repeatedly (partial gen-character place :merchant))
-                       (take (rand-nth [3 3 4]))
-                       (util/indexed-by :name))
+        merchants (repeatedly (rand-nth [3 3 4]) #(gen-character place :merchant))
         place     (assoc place :merchants merchants)]
     (assoc place :desc (desc/gen-place-desc place))))
 
@@ -213,6 +235,29 @@
          ;; 8. update each place with the set of other places it's connected to,
          ;;    and whether or not it's on the border between two groups
          (map #(assoc % :connections (vec (get connections (:name %)))
-                        :border? (contains? borders (:name %))))
-         ;; 9. return a "galaxy" mapping names to generated places
-         (util/indexed-by :name))))
+                        :border? (contains? borders (:name %)))))))
+
+;;; start-of-game setup
+
+(defn gen-init-state []
+  (let [places (gen-places)
+        chars  (mapcat :merchants places)
+        places (map #(update % :merchants (partial map :id)) places)
+        place  (rand-nth places)
+        crew   (repeatedly 2 #(gen-character place :crew))
+        chars  (into chars crew)]
+    {;; universe
+     :chars     (util/indexed-by :id chars)
+     :places    (util/indexed-by :name places)
+     ;; your stuff
+     :cargo     []
+     :max-cargo 6
+     :crew      (set (map :id crew))
+     :max-crew  3
+     :stats     {:cash 40 :ship 40}
+     ;; coordinates
+     :docked?   true
+     :location  (:name place)
+     :turn      0
+     :recent-picks #{:offer-join-crew}} ; prevent init crew from "reminscing" about a place they haven't left yet
+     ))

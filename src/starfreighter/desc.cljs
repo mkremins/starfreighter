@@ -34,4 +34,4 @@
       (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
       "mports " (are) (comma-list (map name (:imports place))) "."]
      ["Our merchant contacts here " (are)
-      (comma-list (map #(-> [:link %]) (vals (:merchants place)))) "."]]))
+      (comma-list (map #(-> [:link %]) (:merchants place))) "."]]))
