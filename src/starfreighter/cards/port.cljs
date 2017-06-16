@@ -304,7 +304,7 @@
                :speaker quitter
                :ok on-resign}
               next-if-no
-              (if (db/can-afford? bonus)
+              (if (db/can-afford? state bonus)
                 {:type :yes-no
                  :speaker quitter
                  :text ["Hmm. Well, if you gave me a really substantial bonus – say, " [:cash bonus]
