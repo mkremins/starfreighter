@@ -87,36 +87,56 @@
                     :on-click #(om/transact! data restart-game)}
             (if (:deadly? (:card data)) "☠️" "🔁"))))))
 
-(defcomponent stat-bars [data owner]
+(defn mood->icon [mood]
+  (util/bucket mood [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]]))
+
+(def trait->icon
+  {:fighter     "👊"
+   :medic       "💊"
+   :mechanic    "🔧"
+   :unconscious "😵"
+   :injured     "🤕"
+   :sick        "🤒"})
+
+(defcomponent stats-view [data owner]
   (render [_]
     (dom/div {:class "stats"}
-      (let [crew-icon
-            (util/bucket (:crew data)
-              [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]])]
-        (for [[stat icon] [[:cash "💰"] [:ship "🚀"]]]
-          (dom/div {:class (str "stat " (name stat))}
-            (dom/div {:class "stat-label"} icon)
-            (dom/div {:class "stat-bar"}
-              (dom/div {:class "stat-bar-fill"
-                        :style {:width (str (get data stat) "%")}}))))))))
+      (dom/span {:class "cash-stat"} (* (get-in data [:stats :cash]) 1000))
+      (dom/span {:class "ship-stat"} (get-in data [:stats :ship]))
+      (dom/span {:class "mood-stat"} (mood->icon (db/avg-crew-mood data)))
+      (dom/span {:class "crew-stat"} (count (:crew data)) "/" (:max-crew data))
+      (dom/span {:class "hold-stat"} (count (:cargo data)) "/" (:max-cargo data))
+      (dom/span {:class "time-stat"} (:turn data)))))
+
+(defcomponent slot-details [data owner]
+  (render [_]
+    (dom/span {:class "details"}
+      (let [traits (:traits data)
+            mood   (when (= (:type data) :char) (mood->icon (db/calc-mood data)))
+            dest   (:destination data)
+            cash   (or (:pay-after data) (:price data))]
+        (dom/span {}
+          (dom/span {:class "mood"} mood)
+          (dom/span {:class "traits"} (str/join (map trait->icon traits)))
+          (when dest
+            (dom/span {:class "dest"}
+              (when (or mood traits) " ")
+              (dom/span {:class "dest-icon"} "➡️ ")
+              (om/build info-link [:places dest])))
+          (when cash
+            (dom/span {:class "pay"}
+              (when (or mood traits dest) " ")
+              (dom/span {:class "pay-icon"} "💰")
+              (* cash 1000)))
+          " ")))))
 
 (defcomponent crew-slot [data owner]
   (render [_]
     (dom/p {:class "slot crew"}
       (if data
-        (dom/span {}
-          (om/build info-link data)
-          (let [traits (:traits data)
-                mood   (util/bucket (db/calc-mood data)
-                         [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]])
-                icons  {:fighter "👊"
-                        :medic "💊"
-                        :mechanic "🔧"
-                        :unconscious "😵"
-                        :injured "🤕"
-                        :sick "🤒"}]
-            (str mood (str/join (map icons traits)))))
-        " "))))
+        (dom/span {} (om/build info-link data))
+        " ")
+      (om/build slot-details data))))
 
 (defcomponent crew-list [data owner]
   (render [_]
@@ -131,13 +151,9 @@
   (render [_]
     (dom/p {:class "slot cargo"}
       (if data
-        (dom/span {}
-          (:name data)
-          (let [dest (:destination data)]
-            (if dest
-              (dom/span {} " ➡️ " (om/build info-link [:places dest]))
-              "")))
-        " "))))
+        (dom/span {} (:name data))
+        " ")
+      (om/build slot-details data))))
 
 (defcomponent cargo-list [data owner]
   (render [_]
@@ -266,9 +282,9 @@
   (render [_]
     (dom/div {:class "app"}
       (dom/div {:class "left"}
+        (om/build stats-view data)
         (om/build card-view (:card data))
         (om/build choice-buttons data)
-        (om/build stat-bars (:stats data))
         (dom/div {:class "lists"}
           (om/build crew-list data)
           (om/build cargo-list data)))

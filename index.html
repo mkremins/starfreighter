@@ -80,7 +80,7 @@
   /* choices */
   .choices {
     display: flex;
-    margin-bottom: 1.5rem;
+    margin-bottom: 30px;
   }
   .choice {
     background: #555;
@@ -114,32 +114,35 @@
   }
   /* stats */
   .stats {
-    margin-bottom: 1.5rem;
-  }
-  .stat {
     display: flex;
+    flex-flow: row wrap;
+    font-size: 22px;
+    margin-bottom: 10px;
   }
-  .stat:not(:last-child){
-    margin-bottom: 5px;
+  .stats .cash-stat { color: yellowgreen; }
+  .stats .cash-stat:before { content: "💰 "; }
+  .stats .ship-stat { color: rgb(255, 106, 53); }
+  .stats .ship-stat:before { content: "🚀 "; }
+  .stats .ship-stat:after {
+    content: "%";
+    font-size: 16px;
   }
-  .stat-label {
-    font-size: 24px;
-    width: 5%;
-  }
-  .stat-bar {
-    background: #333;
-    height: 20px;
-    margin-top: 5px;
+  .stats .mood-stat { top: 0; width: 10%; }
+  .stats .crew-stat:before { content: "💁 "; }
+  .stats .hold-stat:before { content: "📦 "; }
+  .stats .time-stat:before { content: "📅 "; }
+  .stats > * {
+    bottom: 4px;
+    color: lightskyblue;
+    padding: 6px;
     position: relative;
-    width: 95%;
+    text-align: center;
+    width: 18%;
   }
-  .stat-bar-fill {
-    height: 20px;
-    position: absolute;
-    transition: width 1s ease-in-out;
+  .stats > *:before {
+    position: relative;
+    top: 4px;
   }
-  .stat.cash .stat-bar-fill { background: olivedrab; }
-  .stat.ship .stat-bar-fill { background: chocolate; }
   /* lists */
   .lists {
     display: flex;
@@ -175,6 +178,33 @@
     padding: .5rem;
     white-space: pre-wrap; /* this is a band-aid and looks pretty ugly when wrapping occurs */
     width: 203px;
+  }
+  .slot .details {
+    display: block;
+    font-size: 16px;
+    position: relative;
+    top: 2px;
+    white-space: pre;
+  }
+  .slot .details .mood {
+    position: relative;
+    top: 1px;
+  }
+  .slot .details .dest,
+  .slot .details .pay {
+    bottom: 2px;
+    font-size: 12px;
+    position: relative;
+  }
+  .slot .details .pay {
+    color: yellowgreen;
+    float: right;
+    top: 2px;
+  }
+  .slot .details .dest-icon,
+  .slot .details .pay-icon {
+    position: relative;
+    top: 1px;
   }
   /* galaxy map */
   .galaxy-map {
