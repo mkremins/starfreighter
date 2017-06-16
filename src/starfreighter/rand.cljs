@@ -85,6 +85,7 @@
   that a given key will be selected is determined by its weight, i.e. its
   associated non-negative numeric value in the map."
   [choices-with-weights]
+  (assert (not (empty? choices-with-weights)))
   (let [choices-with-thresholds
         (reduce (fn [choices-with-thresholds [choice weight]]
                   (assert (>= weight 0))

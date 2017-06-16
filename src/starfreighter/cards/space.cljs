@@ -30,7 +30,7 @@
 {:id :info-ship-repaired
  :prereq (db/has-at-most? :ship 99)
  :bind   {:mechanic (db/some-where db/mechanic? db/crew)}
- :weight #(util/bucket (:ship (:stats %)) [[20 2] [40 4] [60 2] [100 1]])
+ :weight #(util/bucket (:ship %) [[20 2] [40 4] [60 2] [100 1]])
  :gen (fn [state]
         {:type :info
          :speaker (-> state :bound :mechanic)
@@ -45,7 +45,7 @@
 {:id :request-try-fix-engine
  :prereq (db/has-at-most? :ship 60)
  :bind   {:mechanic (db/some-where db/mechanic? db/crew)}
- :weight #(if (<= (:ship (:stats %)) 20) 2 1)
+ :weight #(if (<= (:ship %) 20) 2 1)
  :gen (fn [{{:keys [mechanic]} :bound :as state}]
         (let [would-succeed? (rand-nth [true true false])
               next-if-yes
@@ -74,7 +74,7 @@
 ;;; crew moods
 
 {:id :request-promise-cash
- :prereq (complement (db/can-afford? 5))
+ :prereq (complement (db/can-afford? 500))
  :weight (constantly 8)
  :gen (fn [state]
         (let [complainer (db/some* state db/crew)]
@@ -186,7 +186,7 @@
  :bind   {:passenger (db/some* db/passengers)}
  :weight (comp count db/passengers)
  :gen (fn [{{:keys [passenger]} :bound :as state}]
-        (let [tip +5]
+        (let [tip 500]
           {:type :yes-no
            :speaker passenger
            :text ["Excuse me, Captain. The passenger quarters are kind of uncomfortable, "
@@ -213,7 +213,7 @@
                 "And I am looking for work… d’you think there might be a place for me in your crew?"]
          :yes [[:add-crew passenger]
                [:drop-cargo passenger]
-               [:spend 20]]
+               [:spend 2000]]
          :no []})}
 
 ;;; arrival in port

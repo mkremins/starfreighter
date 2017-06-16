@@ -101,8 +101,8 @@
 (defcomponent stats-view [data owner]
   (render [_]
     (dom/div {:class "stats"}
-      (dom/span {:class "cash-stat"} (* (get-in data [:stats :cash]) 1000))
-      (dom/span {:class "ship-stat"} (get-in data [:stats :ship]))
+      (dom/span {:class "cash-stat"} (:cash data))
+      (dom/span {:class "ship-stat"} (:ship data))
       (dom/span {:class "mood-stat"} (mood->icon (db/avg-crew-mood data)))
       (dom/span {:class "crew-stat"} (count (:crew data)) "/" (:max-crew data))
       (dom/span {:class "hold-stat"} (count (:cargo data)) "/" (:max-cargo data))
@@ -127,7 +127,7 @@
             (dom/span {:class "pay"}
               (when (or mood traits dest) " ")
               (dom/span {:class "pay-icon"} "💰")
-              (* cash 1000)))
+              cash))
           " ")))))
 
 (defcomponent crew-slot [data owner]

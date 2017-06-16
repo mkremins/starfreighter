@@ -82,7 +82,7 @@
 (def cards [
 
 {:id :request-drinking
- :prereq (db/can-afford? 2)
+ :prereq (db/can-afford? 50)
  :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
  :weight (constantly 1)
  :gen (fn [{{:keys [speaker]} :bound :as state}]
@@ -110,7 +110,7 @@
               {:type :yes-no
                :speaker {:name "Bartender"}
                :text "So, what’ll it be? You havin’ anything?"
-               :yes [[:spend 2]
+               :yes [[:spend 50]
                      [:set-next-card confrontation]]
                :no [[:set-next-card confrontation]]}]
           {:type :yes-no

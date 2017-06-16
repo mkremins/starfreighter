@@ -134,7 +134,7 @@
   (when-let [merchant (db/some-trusting-merchant state)]
     (let [[dest dist] (rand-dest-with-dist state)
           rep         (db/calc-mood merchant)
-          real-pay    (* (rand-base-pay merchant) dist)
+          real-pay    (* (rand-base-pay merchant) dist 1000)
           split-pay?  (cond (db/stingy? merchant) false
                             (and (db/generous? merchant) (>= rep 0)) true
                             (<= rep 0)  false
@@ -157,14 +157,14 @@
       :destination dest
       :distance    dist
       :passenger?  true
-      :pay-before  (* (rand-base-pay passenger) dist))))
+      :pay-before  (* (rand-base-pay passenger) dist 1000))))
 
 (defn gen-goods-for-sale [state]
   (when-let [seller (db/some-trusting-merchant state)]
     (let [stuff (db/rand-export state)]
       {:name   stuff
        :seller seller
-       :price  (* 3 (rand-base-price seller))
+       :price  (* 3 (rand-base-price seller) 1000)
        :counterfeit?
        (rand/weighted-choice
          (cond (db/trustworthy? seller) {true 1 false 4}
@@ -254,7 +254,8 @@
      :max-cargo 6
      :crew      (set (map :id crew))
      :max-crew  3
-     :stats     {:cash 40 :ship 40}
+     :cash      10000
+     :ship      60
      ;; coordinates
      :docked?   true
      :location  (:name place)

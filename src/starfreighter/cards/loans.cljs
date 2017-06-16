@@ -15,11 +15,11 @@
 (def cards [
 
 {:id :offer-loan
- :prereq (every-pred (complement (db/can-afford? 30)) (complement :loan-info))
+ :prereq (every-pred (complement (db/can-afford? 30000)) (complement :loan-info))
  :bind   {:lender db/some-trusting-merchant}
- :weight #(util/bucket (:cash (:stats %)) [[10 4] [20 3] [30 2]])
+ :weight #(util/bucket (:cash %) [[10 4] [20 3] [30 2]])
  :gen (fn [{{:keys [lender]} :bound :as state}]
-        (let [amount 40]
+        (let [amount 40000] ; TODO procedurally vary this
           {:type :yes-no
            :speaker lender
            :text [(rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
@@ -44,7 +44,9 @@
  :weight #(util/bucket (- (:turn %) (:turn-borrowed (:loan-info %)))
             [[25 1] [30 2] [35 4] [40 8] [45 16] [50 32] [1000 100]])
  :gen (fn [state]
-        (let [{:keys [collector lender]} (:loan-info state)
+        (let [{:keys [amount collector lender]} (:loan-info state)
+              interest 10000 ; TODO procedurally vary this
+              total (+ amount interest)
               pay-up
               {:type :info
                :speaker collector
@@ -100,18 +102,19 @@
                :no [[:set-next-card fight]]}]
           {:type :yes-no
            :speaker collector
-           :text ["Hello, Captain. Remember that money you borrowed from "
-                  [:link lender]
+           :text ["Hello, Captain. Remember that " [:cash amount]
+                  " you borrowed from " [:link lender]
                   (rand-nth ["" [" back on " [:link [:places (:home lender)]]]])
                   "? Well, "
                   (rand-nth ["I’m here to collect it"
                              "I’ve been sent to collect it"
                              "it’s time to pay up"])
-                  "! "
+                  "! Plus interest, that comes out to " [:cash total] " "
+                  (rand-nth ["in all" "total"]) ". "
                   (rand-nth ["C" "Now, c"]) "an we" (rand-nth [" all" ""])
                   " agree to do this the easy way?"]
-           :yes (if (db/can-afford? state 50)
-                  [[:spend 50]
+           :yes (if (db/can-afford? state (+ amount interest))
+                  [[:spend total]
                    [:set-next-card pay-up]]
                   [[:set-next-card cant-afford]])
            :no [[:set-next-card fight]]}))}

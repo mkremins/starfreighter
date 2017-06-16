@@ -15,34 +15,42 @@
     (or (some->> (filter pred results) seq rand-nth)
         (some->> results seq rand-nth))))
 
+(defcurried var*
+  "Used to retrieve vars bound in a card's :bind clause from the state."
+  [state var-name]
+  (get (:bound state) var-name))
+
+(defcurried enforce
+  "Used in a card's :bind clause to ensure that an earlier bound var passes the
+  predicate `pred`."
+  [state pred]
+  (or (pred state) nil))
+
 
 ;;; stats
 
 (defcurried can-afford? [state amount]
-  (>= (get-in state [:stats :cash]) amount))
+  (>= (:cash state) amount))
 
 (defcurried earn [state amount]
-  (update-in state [:stats :cash] #(+ % (js/Math.abs amount))))
+  (update state :cash #(+ % (js/Math.abs amount))))
 
 (defcurried spend [state amount]
-  (update-in state [:stats :cash] #(- % (js/Math.abs amount))))
+  (update state :cash #(- % (js/Math.abs amount))))
 
 
 (defcurried repair-ship [state amount]
-  (update-in state [:stats :ship] #(+ % (js/Math.abs amount))))
+  (update state :ship #(util/clamp (+ % amount) 0 100)))
 
 (defcurried damage-ship [state amount]
-  (update-in state [:stats :ship] #(- % (js/Math.abs amount))))
+  (update state :ship #(util/clamp (- % amount) 0 100)))
 
 
 (defcurried has-at-least? [state stat amount]
-  (>= (get-in state [:stats stat]) amount))
+  (>= (get state stat) amount))
 
 (defcurried has-at-most? [state stat amount]
-  (<= (get-in state [:stats stat]) amount))
-
-(defcurried adjust-stat [state stat amount]
-  (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100)))
+  (<= (get state stat) amount))
 
 
 ;;; characters
@@ -267,9 +275,10 @@
   (some freely-sellable? (:cargo state)))
 
 (defn some-sellable-cargo [state]
-  (let [cargo (->> (:cargo state)
-                   (filter freely-sellable?)
-                   (remove #(contains? (:exports (current-place state)) (:name %))))]
+  (let [exports (set (:exports (current-place state)))
+        cargo   (->> (:cargo state)
+                     (filter freely-sellable?)
+                     (remove #(contains? exports (:name %))))]
     (when (> (count cargo) 0) (rand-nth cargo))))
 
 

@@ -4,6 +4,11 @@
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
+(def ^:private base-bonus-amount 5000)
+(def ^:private hire-price 30000)
+(def ^:private repair-price 30000)
+(def ^:private upgrade-price 50000)
+
 (def cards [
 
 ;;; "normal" repeatable jobs, cargo buy/sell offers, etc
@@ -65,11 +70,11 @@
  :repeatable? true
  :bind   [[:item    db/some-sellable-cargo]
           [:buyer   db/some-trusting-merchant]
-          [:import? #(contains? (:imports (db/current-place %)) (-> % :bound :item :name))]]
- :weight #(cond-> 4 (-> % :bound :import?) (* 2))
+          [:import? #(contains? (:imports (db/current-place %)) (:name (db/var* % :item)))]]
+ :weight #(cond-> 4 (db/var* % :import?) (* 2))
  :gen (fn [{{:keys [buyer import? item]} :bound :as state}]
         (let [stuff  (:name item)
-              amount (if import? +30 +20)]
+              amount (* (if import? +30 +20) 1000)] ; TODO procedurally vary this
           {:type :yes-no
            :speaker buyer
            :text [(rand-nth ["Greetings" "Hello"])
@@ -97,8 +102,11 @@
 
 {:id :offer-sell-cargo
  :repeatable? true
- :prereq (every-pred db/can-hold-more-cargo? (db/can-afford? 18))
- :bind   {:item gen/gen-goods-for-sale}
+ :prereq db/can-hold-more-cargo?
+ :bind   [[:item gen/gen-goods-for-sale]
+          ;; TODO gen-goods-for-sale should never generate anything we can't afford
+          ;; (so the db/enforce requirement here shouldn't be necessary)
+          [:_ #(db/enforce % (db/can-afford? (:price (db/var* % :item))))]]
  :weight db/open-cargo-slots
  :gen (fn [{{:keys [item]} :bound :as state}]
         (let [{:keys [price seller], stuff :name} item]
@@ -124,7 +132,7 @@
 
 {:id :offer-join-crew
  :repeatable? true
- :prereq (every-pred db/can-hold-more-crew? (db/can-afford? 30))
+ :prereq (every-pred db/can-hold-more-crew? (db/can-afford? hire-price))
  :weight db/open-crew-slots
  :gen (fn [state]
         (let [char (gen/gen-local-character state)]
@@ -171,68 +179,65 @@
                                   ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
                                   " to learn."]]))]
            :yes [[:add-crew char]
-                 [:spend 30]]
+                 [:spend hire-price]]
            :no []}))}
 
 ;;; special offers from merchants
 
 {:id :offer-repair-ship
- :prereq (every-pred (db/has-at-most? :ship 70) (db/can-afford? 30))
+ :prereq (every-pred (db/has-at-most? :ship 70) (db/can-afford? repair-price))
  :bind   {:merchant db/some-trusting-merchant}
- :weight #(util/bucket (:ship (:stats %)) [[20 16] [40 6] [100 4]])
+ :weight #(util/bucket (:ship %) [[20 16] [40 6] [100 4]])
  :gen (fn [{{:keys [merchant]} :bound :as state}]
-        (let [price -30]
-          {:type :yes-no
-           :speaker merchant
-           :text ["Looks like your ship’s in need of some repair – it’s practically falling apart! "
-                  "Want me to help you out with that? It’ll only run you about " [:cash price] "."]
-           :yes [[:spend 30]
-                 [:repair-ship 20]]
-           :no []}))}
+        {:type :yes-no
+         :speaker merchant
+         :text ["Looks like your ship’s in need of some repair – it’s practically falling apart! "
+                "Want me to help you out with that? It’ll only run you about " [:cash repair-price] "."]
+         :yes [[:spend repair-price]
+               [:repair-ship 20]]
+         :no []})}
 
 {:id :offer-upgrade-crew-quarters
- :prereq (every-pred #(< (:max-crew %) 6) (db/can-afford? 50))
+ :prereq (every-pred #(< (:max-crew %) 6) (db/can-afford? upgrade-price))
  :bind   {:merchant db/some-trusting-merchant}
  :weight #(if (db/can-hold-more-crew? %) 1 2)
  :gen (fn [{{:keys [merchant]} :bound :as state}]
-        (let [price -50]
-          {:type :yes-no
-           :speaker merchant
-           :text ["Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
-                  "to give you a little more breathing room… for a fair price, of course. "
-                  "How does " [:cash price] " sound" (rand-nth ["" " to you"]) "?"]
-           :yes [[:call #(update % :max-crew inc)]
-                 [:spend price]]
-           :no []}))}
+        {:type :yes-no
+         :speaker merchant
+         :text ["Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
+                "to give you a little more breathing room… for a fair price, of course. "
+                "How does " [:cash upgrade-price] " sound" (rand-nth ["" " to you"]) "?"]
+         :yes [[:call #(update % :max-crew inc)]
+               [:spend upgrade-price]]
+         :no []})}
 
 {:id :offer-upgrade-cargo-hold
- :prereq (every-pred #(< (:max-cargo %) 12) (db/can-afford? 50))
+ :prereq (every-pred #(< (:max-cargo %) 12) (db/can-afford? upgrade-price))
  :bind   {:merchant db/some-trusting-merchant}
  :weight #(if (db/can-hold-more-cargo? %) 1 2)
  :gen (fn [{{:keys [merchant]} :bound :as state}]
-        (let [price -50]
-          {:type :yes-no
-           :speaker merchant
-           :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
-                  "How about I do you a favor and modify this bucket of bolts? For a price, of course. "
-                  "Does " [:cash price] " sound good" (rand-nth ["" " to you"]) "?"]
-           :yes [[:call #(update % :max-cargo inc)]
-                 [:spend price]]
-           :no []}))}
+        {:type :yes-no
+         :speaker merchant
+         :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
+                "How about I do you a favor and modify this bucket of bolts? For a price, of course. "
+                "Does " [:cash upgrade-price] " sound good" (rand-nth ["" " to you"]) "?"]
+         :yes [[:call #(update % :max-cargo inc)]
+               [:spend upgrade-price]]
+         :no []})}
 
 ;;; requests from the crew
 
 {:id :request-bonus
- :prereq #(db/can-afford? % (* (count (:crew %)) 5))
- :bind   {:speaker (db/some* db/crew)}
- :weight #(+ (util/bucket (:cash (:stats %)) [[60 1] [80 2] [100 3]])
+ :bind   [[:speaker (db/some* db/crew)]
+          [:amount  (comp (partial * base-bonus-amount) count :crew)]
+          [:_       #(db/enforce % (db/can-afford? (db/var* % :amount)))]]
+ :weight #(+ (util/bucket (:cash %) [[60000 1] [80000 2] [100000 3]])
              (util/bucket (db/avg-crew-mood %) [[40 3] [60 2] [80 1] [100 0]]))
- :gen (fn [{{:keys [speaker]} :bound :as state}]
+ :gen (fn [{{:keys [amount speaker]} :bound :as state}]
         (let [crew-size (count (:crew state))
               just-one? (= crew-size 1)]
           {:type :yes-no
            :speaker speaker
-           ;; TODO work a mention of amount into this somewhere
            :text ["Say, Cap’n… "
                   (rand-nth (if just-one? ["I’ve" "we’ve" "we’ve both"] ["we’ve" "we’ve all"]))
                   " been working pretty hard lately, and "
@@ -241,8 +246,9 @@
                     [(rand-nth ["the rest of the crew and I" "we"]) " were"])
                   " wondering if " (rand-nth ["maybe " ""]) (if just-one? "I" "we")
                   " might be due a small bonus for everything " (if just-one? "I" "we")
-                  " do" (rand-nth ["." " around here."])]
-           :yes [[:spend (* 5 crew-size)]
+                  " do" (rand-nth ["." " around here."]) " " [:cash base-bonus-amount]
+                  " each seems pretty fair…"]
+           :yes [[:spend amount]
                  [:add-whole-crew-memory :gave-bonus]]
            :no [[:add-whole-crew-memory :declined-bonus-request]]}))}
 
@@ -284,63 +290,12 @@
            :yes [[:depart-for proposed-dest]]
            :no [[:add-memory speaker :declined-depart-request]]}))}
 
-{:id :request-gambling
- :prereq (db/can-afford? 5)
- :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
- :weight (constantly 1)
- :gen (fn [{{:keys [speaker]} :bound :as state}]
-        (let [dealer {:name "Dealer"}
-              did-well
-              ["Ooh, that’s not bad at all! You, my friend, might just be in for an exceptionally good night. "
-               "Alright then, let’s have another go!"]
-              broke-even
-              "How inconclusive! That’s simply no fun at all – best have another go!"
-              did-poorly
-              "Ooh, that’s too bad! Never mind that, though – I’m sure your luck will turn around before long!"
-              cant-afford
-              "Oh, what a pity – seems you can’t afford to play any more. Do be sure to return when you can!"]
-          (letfn [(walk-away [attempts]
-                    {:type :info
-                     :speaker dealer
-                     :text "Walking away already? Well, I certainly hope you enjoyed yourself!"
-                     ;; TODO make this outcome dynamic again
-                     :ok [[:add-memory speaker :went-gambling-broke-even]]})
-                  (roll-the-dice [attempts]
-                    (let [outcome (rand/weighted-choice {0 7, 5 7, 10 1, 15 1, 20 1})
-                          next-card
-                          (if (< (+ (:cash (:stats state)) outcome) 5)
-                            (assoc (walk-away attempts) :text cant-afford)
-                            (assoc (make-wager attempts) :text
-                              (cond (< outcome 5) did-poorly
-                                    (= outcome 5) broke-even
-                                    (> outcome 5) did-well)))]
-                      {:type :info
-                       :speaker speaker
-                       :text "C’mon, Cap’n – let’s see how we do!"
-                       :icon "🎲"
-                       :ok [[:earn outcome]
-                            [:set-next-card next-card]]}))
-                  (make-wager [attempts]
-                    {:type :yes-no
-                     :speaker dealer
-                     :text "Are you feeling lucky? C’mon, then, step right on up to the table and place your bets."
-                     :yes [[:spend 5]
-                           ;; TODO we *should* be using :set-next-card here, but that causes an infinite loop :|
-                           [:call #(assoc % :next-card (roll-the-dice (inc attempts)))]]
-                     :no [[:set-next-card (walk-away attempts)]]})]
-            {:type :yes-no
-             :speaker speaker
-             :text ["Hey, Cap’n – as long as we’re in port, I’m gonna go try my "
-                    (rand-nth ["hand" "luck"]) " at some gambling. Wanna come along?"]
-             :yes [[:set-next-card (make-wager 0)]]
-             :no []})))}
-
 {:id :request-resign
  :prereq #(> (count (:crew %)) 1)
  :bind   {:quitter (db/some-where (db/mood-at-most? 30) db/crew)}
- :weight #(util/bucket (-> % :bound :quitter db/calc-mood) [[5 8] [10 6] [15 4] [20 2] [30 1]])
+ :weight #(util/bucket (db/calc-mood (db/var* % :quitter)) [[5 8] [10 6] [15 4] [20 2] [30 1]])
  :gen (fn [{{:keys [quitter]} :bound :as state}]
-        (let [bonus 30
+        (let [bonus 30000
               on-resign
               [[:add-whole-crew-memory :crewmate-resigned]
                [:drop-crew quitter]]
