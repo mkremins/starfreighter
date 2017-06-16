@@ -22,9 +22,8 @@
   (atom (restart-game)))
 
 (defn handle-choice [decision state]
-  (let [update-fn (get-in state [:card decision])
-        update-fn (cond->> update-fn (vector? update-fn) (apply comp))
-        state' (update-fn state)
+  (let [effects (get-in state [:card decision])
+        state' (db/process-effects state effects)
         card (cards/draw-next-card state')]
     (-> state'
         (assoc :card card)

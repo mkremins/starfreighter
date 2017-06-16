@@ -114,7 +114,7 @@
 (defn rand-dest-with-dist [state]
   (let [tiers   (distance-tiers state)
         indexes (range (count tiers))
-        weights (->> indexes reverse (map inc) (map #(* % %)))
+        weights (->> indexes reverse (map inc) (map #(* % % %)))
         index   (rand/weighted-choice (zipmap indexes weights))]
     [(rand-nth (nth tiers index)) (inc index)]))
 

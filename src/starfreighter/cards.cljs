@@ -19,19 +19,19 @@
     (:interruptible? card)
     (case (:type card)
       :game-over false
-      :info (= (:ok card) identity)
-      :yes-no (or (= (:yes card) identity)
-                  (= (:no card) identity)))))
+      :info (empty? (:ok card))
+      :yes-no (or (empty? (:yes card))
+                  (empty? (:no card))))))
 
 (defn prepare-to-depart [state]
   (let [dest (:info-target state)]
     (assoc state :card
       {:type :yes-no
        :interruptible? false
-       :speaker (db/some-crew state)
+       :speaker (db/some* state db/crew)
        :text ["Oh, we’re leaving for " (:name dest) " already? Guess I’ll go fire up the engine!"]
-       :yes (db/depart-for (second (db/pathfind state dest)))
-       :no identity})))
+       :yes [[:depart-for dest]]
+       :no []})))
 
 (defn applicable-game-over-if-any [{:keys [stats] :as state}]
   (cond
@@ -56,13 +56,12 @@
                              (= (:destination %) (:location state)))
                        (:cargo state))]
         {:type :info
-         :speaker (db/some-crew state)
+         :speaker (db/some* state db/crew)
          :text "I’ll go drop off the goods we’re supposed to deliver."
-         :ok [#(assoc % :cargo (vec keeping))
-              (db/earn (reduce + (map :pay dropping)))
-              (apply comp
-                (for [{:keys [merchant]} dropping :when merchant]
-                  (db/add-memory merchant :completed-delivery)))]})
+         :ok (into [[:call #(assoc % :cargo (vec keeping))]
+                    [:earn (reduce + (map :pay dropping))]]
+                   (for [{:keys [merchant]} dropping :when merchant]
+                     [:add-memory merchant :completed-delivery]))})
     ;; drop off passengers you're supposed to deliver
     (db/has-passengers-to-drop? state)
       (let [[dropping keeping]
@@ -72,7 +71,7 @@
         {:type :info
          :speaker (rand-nth dropping)
          :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
-         :ok #(assoc % :cargo (vec keeping))})))
+         :ok [[:call #(assoc % :cargo (vec keeping))]]})))
 
 (defn try-pick [state metacard]
   (when (and (or (:repeatable? metacard)

@@ -39,6 +39,9 @@
                   xs seen)))]
      (step coll #{}))))
 
+(defn error [& strs]
+  (throw (js/Error. (apply str strs))))
+
 (defn indexed-by
   "Returns a map from `(f item)` to `item` for every `item` in `coll`."
   [f coll]

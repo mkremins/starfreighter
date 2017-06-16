@@ -2,6 +2,20 @@
   (:require [starfreighter.rand :as rand]
             [starfreighter.util :as util :refer-macros [defcurried]]))
 
+;;; queries
+
+(defcurried some* [state query]
+  (some->> (query state) seq rand-nth))
+
+(defcurried some-where [state pred query]
+  (some->> (query state) (filter pred) seq rand-nth))
+
+(defcurried some-preferably [state pred query]
+  (let [results (query state)]
+    (or (some->> (filter pred results) seq rand-nth)
+        (some->> results seq rand-nth))))
+
+
 ;;; stats
 
 (defcurried can-afford? [state amount]
@@ -10,8 +24,15 @@
 (defcurried earn [state amount]
   (update-in state [:stats :cash] #(+ % (js/Math.abs amount))))
 
-(defcurried pay [state amount]
+(defcurried spend [state amount]
   (update-in state [:stats :cash] #(- % (js/Math.abs amount))))
+
+
+(defcurried repair-ship [state amount]
+  (update-in state [:stats :ship] #(+ % (js/Math.abs amount))))
+
+(defcurried damage-ship [state amount]
+  (update-in state [:stats :ship] #(- % (js/Math.abs amount))))
 
 
 (defcurried has-at-least? [state stat amount]
@@ -22,10 +43,6 @@
 
 (defcurried adjust-stat [state stat amount]
   (update-in state [:stats stat] #(util/clamp (+ % amount) 0 100)))
-
-
-
-
 
 
 ;;; characters
@@ -149,16 +166,6 @@
 (defn crew [state]
   (map (partial ->char state) (:crew state)))
 
-(defcurried some-crew-where [state pred]
-  (let [passing (filter pred (crew state))]
-    (when (> (count passing) 0) (rand-nth passing))))
-
-(def some-crew
-  (some-crew-where identity))
-
-(defcurried some-crew-preferably [state pred]
-  (or (some-crew-where state pred) (some-crew state)))
-
 (defn avg-crew-mood [state]
   (let [crew (crew state)]
     (/ (reduce + (map calc-mood crew)) (count crew))))
@@ -208,10 +215,11 @@
            (second)))))
 
 (defcurried depart-for [state dest]
-  (assoc state
-    :docked? false
-    :destination dest
-    :recent-picks #{}))
+  (let [first-hop (second (pathfind state dest))]
+    (assoc state
+      :docked? false
+      :destination first-hop
+      :recent-picks #{})))
 
 (defn arrive [state]
   (assoc state
@@ -243,10 +251,6 @@
 
 (defn passengers [state]
   (filter :passenger? (:cargo state)))
-
-(defn some-passenger [state]
-  (let [passengers (passengers state)]
-    (when (> (count passengers) 1) (rand-nth passengers))))
 
 (defn has-cargo-to-drop? [state]
   (some #(and (not (:passenger? %))
@@ -281,8 +285,7 @@
   (> (calc-mood merchant) -15))
 
 (defn some-trusting-merchant [state]
-  (let [merchants (filter will-trust-with-normal-job? (merchants state))]
-    (when (> (count merchants) 0) (rand-nth merchants))))
+  (some-where state will-trust-with-normal-job? merchants))
 
 
 ;;; cards
@@ -295,3 +298,68 @@
 
 (defn unset-deck [state]
   (dissoc state :deck))
+
+
+;;; effects
+
+(def char-effect-fns
+  {:add-trait  add-trait*
+   :drop-trait drop-trait*
+   :add-memory add-memory*
+   :call       (fn [char f & args] (apply f char args))})
+
+(defn process-char-effect [state char effect]
+  (if-let [[op & args] effect]
+    (if-let [f (get char-effect-fns op)]
+      (update-char state char (apply f args))
+      (util/error "No such char effect " op))
+    (util/error "Expected char effect [:op &args], got " (pr-str effect))))
+
+(def effect-fns
+  {;; cash
+   :earn                  earn
+   :spend                 spend
+   ;; ship
+   :repair-ship           repair-ship
+   :damage-ship           damage-ship
+   ;; characters
+   :remember-char         remember-char
+   :forget-char           forget-char
+   :update-char           update-char ;; TODO will need to be custom (using char effects)
+   :add-memory            add-memory
+   ;; crew
+   :add-crew              add-crew
+   :drop-crew             drop-crew
+   :update-all-crew       update-all-crew ;; TODO will need to be custom (using char effects)
+   :add-whole-crew-memory add-whole-crew-memory
+   ;; travel
+   :depart-for            depart-for
+   :arrive                arrive
+   ;; cargo
+   :add-cargo             add-cargo
+   :drop-cargo            drop-cargo
+   ;; cards
+   :set-next-card         set-next-card
+   :set-deck              set-deck
+   :unset-deck            unset-deck
+   ;; generic
+   :call                  (fn [state f & args] (apply f state args))
+   })
+
+(defn process-effect [state effect]
+  (if-let [[op & args] effect]
+    (if-let [f (get effect-fns op)]
+      (apply f state args)
+      (case op
+        :update-char
+          (let [[char char-effect] args]
+            (process-char-effect state char char-effect))
+        :update-all-crew
+          (let [char-effect (second args)]
+            (reduce #(process-char-effect %1 %2 char-effect) state (crew state)))
+        ;else
+          (util/error "No such effect " op)))
+    (util/error "Expected effect [:op &args], got " (pr-str effect))))
+
+(defn process-effects [state effects]
+  (reduce process-effect state effects))
