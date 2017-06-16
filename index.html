@@ -83,31 +83,19 @@
     background: #555;
     border: 1px solid #aaa;
     cursor: pointer;
+    flex: 1 1 auto;
     font-size: 32px;
     padding-top: 5px;
     text-align: center;
   }
-  .choice.no {
-    background: brown;
+  .choice:first-child {
     border-bottom-left-radius: 9px;
+  }
+  .choice:not(:last-child) {
     border-right-width: 0;
-    width: 50%;
   }
-  .choice.yes {
-    background: darkgreen;
+  .choice:last-child {
     border-bottom-right-radius: 9px;
-    width: 50%;
-  }
-  .choice.ok, .choice.restart {
-    border-bottom-left-radius: 9px;
-    border-bottom-right-radius: 9px;
-    width: 100%;
-  }
-  .choice.ok {
-    background: steelblue;
-  }
-  .choice.restart {
-    background: brown;
   }
   /* stats */
   .stats {

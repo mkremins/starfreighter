@@ -3,33 +3,16 @@
             [om.core :as om]
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
-            [starfreighter.cards :as cards]
             [starfreighter.db :as db]
             [starfreighter.desc :as desc]
-            [starfreighter.gen :as gen]
+            [starfreighter.game :as game]
             [starfreighter.geom :as geom]
             [starfreighter.util :as util]))
 
 (enable-console-print!)
 
-(defn restart-game [& _]
-  (let [state (gen/gen-init-state)
-        card  (cards/draw-next-card state)]
-    (-> state (assoc :card card)
-              (update :recent-picks (fnil conj #{}) (:id card)))))
-
 (defonce app-state
-  (atom (restart-game)))
-
-(defn handle-choice [decision state]
-  (let [effects (get-in state [:card decision])
-        state' (db/process-effects state effects)
-        card (cards/draw-next-card state')]
-    (-> state'
-        (assoc :card card)
-        (update :recent-picks conj (:id card))
-        (cond-> (:advance-time? card) (update :turn inc))
-        (dissoc :next-card))))
+  (atom (game/restart-game)))
 
 (defcomponent info-link [data owner]
   (render [_]
@@ -70,22 +53,13 @@
 (defcomponent choice-buttons [data owner]
   (render [_]
     (dom/div {:class "choices"}
-      (case (:type (:card data))
-        :yes-no
-          [(dom/div {:class "choice no"
-                     :on-click #(om/transact! data (partial handle-choice :no))}
-             "👎")
-           (dom/div {:class "choice yes"
-                     :on-click #(om/transact! data (partial handle-choice :yes))}
-             "👍")]
-        :info
-          (dom/div {:class "choice ok"
-                    :on-click #(om/transact! data (partial handle-choice :ok))}
-            (or (:icon (:card data)) "👌"))
-        :game-over
-          (dom/div {:class "choice restart"
-                    :on-click #(om/transact! data restart-game)}
-            (if (:deadly? (:card data)) "☠️" "🔁"))))))
+      (for [choice (:choices (:card data))]
+        (dom/div {:class "choice"
+                  :style {:background (:background choice)}
+                  :on-click (fn [ev]
+                              (.stopPropagation ev)
+                              (om/transact! data #(game/handle-choice % (:effects choice))))}
+          (:icon choice))))))
 
 (defn mood->icon [mood]
   (util/bucket mood [[20 "😡"] [40 "😒"] [60 "😐"] [80 "🙂"] [100 "😃"]]))
@@ -260,12 +234,12 @@
           (if docked? (str "📍 " location) (str "➡️ " destination)))
         ;; draw button to depart for target (if any)
         (when (some-> target-place :name (not= location))
-          (let [enabled? (and docked? (cards/interruptible? (:card data)))]
+          (let [enabled? (and docked? (game/interruptible? (:card data)))]
             (dom/text {:class (cond-> "depart-button" (not enabled?) (str " disabled"))
                        :x 468 :y 462 :text-anchor "end" :font-size 18
                        :on-click (if enabled?
                                    #(do (.stopPropagation %)
-                                        (om/transact! data cards/prepare-to-depart))
+                                        (om/transact! data game/prepare-to-depart))
                                    #(.stopPropagation %))}
               (str "➡️ " (:name target-place)))))))))
 

@@ -236,29 +236,3 @@
          ;;    and whether or not it's on the border between two groups
          (map #(assoc % :connections (vec (get connections (:name %)))
                         :border? (contains? borders (:name %)))))))
-
-;;; start-of-game setup
-
-(defn gen-init-state []
-  (let [places (gen-places)
-        chars  (mapcat :merchants places)
-        places (map #(update % :merchants (partial map :id)) places)
-        place  (rand-nth places)
-        crew   (repeatedly 2 #(gen-character place :crew))
-        chars  (into chars crew)]
-    {;; universe
-     :chars     (util/indexed-by :id chars)
-     :places    (util/indexed-by :name places)
-     ;; your stuff
-     :cargo     []
-     :max-cargo 6
-     :crew      (set (map :id crew))
-     :max-crew  3
-     :cash      10000
-     :ship      60
-     ;; coordinates
-     :docked?   true
-     :location  (:name place)
-     :turn      1
-     :recent-picks #{:offer-join-crew}} ; prevent init crew from "reminscing" about a place they haven't left yet
-     ))
