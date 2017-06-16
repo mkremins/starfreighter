@@ -28,7 +28,7 @@
     (-> state'
         (assoc :card card)
         (update :recent-picks conj (:id card))
-        (update :turn inc)
+        (cond-> (:advance-time? card) (update :turn inc))
         (dissoc :next-card))))
 
 (defcomponent info-link [data owner]

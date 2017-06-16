@@ -103,4 +103,6 @@
                    (map #((:weight %) (assoc state :bound (:bound %))))
                    (zipmap pickable)))]
         (prn id)
-        (assoc (gen (assoc state :bound bound)) :id id))))
+        (assoc (gen (assoc state :bound bound))
+          :advance-time? (not (:deck state)) ; generally, only "top-level" cards should advance time
+          :id id))))

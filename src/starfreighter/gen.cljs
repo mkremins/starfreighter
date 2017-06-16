@@ -258,6 +258,6 @@
      ;; coordinates
      :docked?   true
      :location  (:name place)
-     :turn      0
+     :turn      1
      :recent-picks #{:offer-join-crew}} ; prevent init crew from "reminscing" about a place they haven't left yet
      ))
