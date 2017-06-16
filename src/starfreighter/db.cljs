@@ -327,6 +327,8 @@
    :forget-char           forget-char
    :update-char           update-char ;; TODO will need to be custom (using char effects)
    :add-memory            add-memory
+   :add-trait             add-trait
+   :drop-trait            drop-trait
    ;; crew
    :add-crew              add-crew
    :drop-crew             drop-crew

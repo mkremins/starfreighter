@@ -176,29 +176,6 @@
 
 ;;; special offers from merchants
 
-{:id :offer-loan
- :prereq (every-pred (complement (db/can-afford? 30)) (complement :loan-info))
- :bind   {:lender db/some-trusting-merchant}
- :weight #(util/bucket (:cash (:stats %)) [[10 4] [20 3] [30 2]])
- :gen (fn [{{:keys [lender]} :bound :as state}]
-        (let [amount 40]
-          {:type :yes-no
-           :speaker lender
-           :text [(rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
-                  " I hear tell you’re "
-                  (rand-nth ["running a bit short on" "strapped for"])
-                  " cash. I could certainly lend you, say, " [:cash amount] "… "
-                  "provided you agree to pay it back promptly, plus a bit of interest. "
-                  (rand-nth ["Do we have a deal?" "What do you say?"])]
-           :yes [[:call
-                  #(assoc % :loan-info
-                     {:amount amount
-                      :lender lender
-                      :collector (gen/gen-local-character state)
-                      :turn-borrowed (:turn state)})]
-                 [:earn amount]]
-           :no []}))}
-
 {:id :offer-repair-ship
  :prereq (every-pred (db/has-at-most? :ship 70) (db/can-afford? 30))
  :bind   {:merchant db/some-trusting-merchant}
@@ -307,109 +284,6 @@
            :yes [[:depart-for proposed-dest]]
            :no [[:add-memory speaker :declined-depart-request]]}))}
 
-{:id :request-drinking
- :prereq (db/can-afford? 5)
- :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
- :weight (constantly 1)
- :gen (fn [{{:keys [speaker]} :bound :as state}]
-        (let [patron (assoc (gen/gen-local-character state) :name "Rowdy Bar Patron")
-              some-conscious-crew
-              (db/some* (complement db/unconscious?) db/crew)
-              some-conscious-opponent
-              #(some->> % :fight-info :opponents vals (remove db/unconscious?) seq rand-nth)
-              bar-fight-deck
-              [{:id :you-win
-                :prereq (complement some-conscious-opponent)
-                :weight (constantly 1)
-                :gen (fn [state]
-                       (let [last-hitter (:last-hitter (:fight-info state))]
-                         {:type :info
-                          :speaker last-hitter
-                          :text ["That’ll teach you to mess with " (:name last-hitter) "! "
-                                 "C’mon, Cap’n, let’s get outta here."]
-                          :ok [[:call #(dissoc % :fight-info)]
-                               [:unset-deck]
-                               [:add-whole-crew-memory :won-bar-fight]
-                               [:update-all-crew
-                                (fn [crew]
-                                  (cond-> crew (db/has-trait? crew :unconscious)
-                                    (-> crew (db/drop-trait* :unconscious)
-                                             (db/add-trait* :injured))))]]}))}
-
-               {:id :they-win
-                :prereq (complement some-conscious-crew)
-                :weight (constantly 1)
-                :gen (fn [state]
-                       {:type :game-over
-                        :text ["You die tragically in a bar fight on " (:location state) "."]
-                        :deadly? true})}
-
-               {:id :hit-with-object
-                :repeatable? true
-                :bind   {:hitter some-conscious-crew
-                         :target some-conscious-opponent}
-                :weight (constantly 1)
-                :gen (fn [{{:keys [hitter target]} :bound}]
-                       {:type :info
-                        :text [(:shortname hitter) " hits one of your assailants with a "
-                               (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                               ", knocking them to the ground. It doesn’t look like they’ll be "
-                               "getting up any time soon."]
-                        :ok [[:call
-                              #(-> % (update-in [:fight-info :opponents (:name target)] db/add-trait* :unconscious)
-                                     (assoc-in [:fight-info :last-hitter] (:name hitter)))]]
-                        :icon "💥"})}
-
-               {:id :get-hit-with-object
-                :repeatable? true
-                :bind   {:hitter some-conscious-opponent
-                         :target some-conscious-crew}
-                :weight (constantly 1)
-                :gen (fn [{{:keys [hitter target]} :bound}]
-                       {:type :info
-                        :text ["One of your assailants hits " (:shortname target) " with a "
-                               (rand-nth ["bottle" "chair" "pitcher" "table leg"])
-                               ", knocking them to the ground. It doesn’t look like they’ll be "
-                               "getting up any time soon."]
-                        :ok [[:add-trait target :unconscious]]
-                        :icon "💥"})}]
-              bar-fight
-              {:type :info
-               :speaker patron
-               :text "Can’t take a hint, huh? Guess we’ll just have to teach you a lesson!"
-               :ok [[:set-deck bar-fight-deck]
-                    [:call
-                     (fn [state]
-                       (let [opponents (into [patron] (repeatedly 2 #(gen/gen-local-character state)))]
-                         (assoc state :fight-info {:opponents (zipmap (map :name opponents) opponents)})))]]}
-              walk-away
-              {:type :info
-               :text ["You gather your crew and walk out of the bar, determinedly ignoring "
-                      "the look of protest on " (:shortname speaker) "’s face."]
-               :ok [[:add-memory speaker :backed-down-from-bar-fight]]}
-              confrontation
-              {:type :yes-no
-               :speaker patron
-               :text (rand-nth [["Oi! We don’t take too kindly to spacers round these parts. "
-                                 "How’s about you shove off afore we start doin’ the shoving!"]
-                                ["Spacer, eh? Don’t see too many of your kind round these parts. "
-                                 "Reckon you oughta be on your way now."]])
-               :yes [[:set-next-card walk-away]]
-               :no [[:set-next-card bar-fight]]}
-              walk-to-bar
-              {:type :yes-no
-               :speaker {:name "Bartender"}
-               :text "So, what’ll it be? You havin’ anything?"
-               :yes [[:spend 2]
-                     [:set-next-card confrontation]]
-               :no [[:set-next-card confrontation]]}]
-          {:type :yes-no
-           :speaker speaker
-           :text ["Hey, Cap’n – have you even left the ship since we got into port? "
-                  "C’mon, come have a drink with us!"]
-           :yes [[:set-next-card walk-to-bar]]
-           :no []}))}
-
 {:id :request-gambling
  :prereq (db/can-afford? 5)
  :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
@@ -451,7 +325,8 @@
                      :speaker dealer
                      :text "Are you feeling lucky? C’mon, then, step right on up to the table and place your bets."
                      :yes [[:spend 5]
-                           [:set-next-card (roll-the-dice (inc attempts))]]
+                           ;; TODO we *should* be using :set-next-card here, but that causes an infinite loop :|
+                           [:call #(assoc % :next-card (roll-the-dice (inc attempts)))]]
                      :no [[:set-next-card (walk-away attempts)]]})]
             {:type :yes-no
              :speaker speaker
@@ -510,84 +385,4 @@
                 " again. Especially since this time, I know I can leave whenever I want!"]
          :ok [[:add-memory speaker :visited-home]]})}
 
-;;; followups for ongoing plotlines
-
-{:id :collect-loan
- :prereq #(and (:loan-info %)
-               (not (:collection-failed? (:loan-info %)))
-               (>= (- (:turn %) (:turn-borrowed (:loan-info %))) 20))
- :weight #(util/bucket (- (:turn %) (:turn-borrowed (:loan-info %)))
-            [[25 1] [30 2] [35 4] [40 8] [45 16] [50 32] [1000 100]])
- :gen (fn [state]
-        (let [{:keys [collector lender]} (:loan-info state)
-              pay-up
-              {:type :info
-               :speaker collector
-               :text ["Pleasure doing business with you, Captain. "
-                      (:shortname lender) " sends their regards!"]
-               :ok [[:call #(dissoc % :loan-info)]]}
-              surrender
-              {:type :game-over
-               :text ["Your ship is repossessed and your remaining assets seized. "
-                      "Your only hope is that they are collectively worth enough "
-                      "to clear the debt and keep you out of indentured servitude "
-                      "to " (:name lender) "."]}
-              fight-outcome
-              (let [fight-score (reduce + (map #(if (db/fighter? %) 2 1) (db/crew state)))
-                    enemy-fight-score (rand/rand-int* 2 5)]
-                (cond
-                  (> fight-score enemy-fight-score)
-                    {:type :info
-                     :speaker (db/some-preferably state db/fighter? db/crew)
-                     :text ["Yee-haw, look at ‘em run! All you gotta do is zap the leader "
-                            "and the rest’ll go running for the hills."]
-                     :ok [[:call #(assoc-in % [:loan-info :collection-failed?] true)]
-                          [:add-whole-crew-memory :won-collector-fight]]}
-                  (= fight-score enemy-fight-score)
-                    {:type :info
-                     :speaker collector
-                     :text ["Well then… looks like this is my cue to exit. When next we meet, "
-                            "please do try to be a bit more civil – otherwise I might have to do "
-                            "something we’ll both regret."]
-                     :ok [[:call #(assoc-in % [:loan-info :collection-failed?] true)]]}
-                  (< fight-score enemy-fight-score)
-                    {:type :game-over
-                     :deadly? true
-                     :text ["All at once, your chest lights up with pain, and you instinctively "
-                            "gasp for air. The last thing you see before you lose consciousness is "
-                            "the slight frown of disapproval on " (:name collector) "’s face."]}))
-              fight
-              {:type :info
-               :text ["You’re not sure who shoots first. Your crew are quick on the draw, "
-                      "but so are " (:shortname collector) "’s goons. Dust flies in your face "
-                      "as you duck for cover, the air around you full of searing light."]
-               :icon "💥"
-               :ok [[:set-next-card fight-outcome]
-                    [:add-memory lender :refused-repay-fought-collector]]}
-              cant-afford
-              {:type :yes-no
-               :speaker collector
-               :text ["Ah, you can’t afford it? That is indeed a problem. "
-                      "In that case, I’m afraid I’ll have to ask you to surrender your vessel "
-                      "and submit to arrest. We must recoup our losses somehow…"]
-               :yes [[:spend 100]
-                     [:set-next-card surrender]]
-               :no [[:set-next-card fight]]}]
-          {:type :yes-no
-           :speaker collector
-           :text ["Hello, Captain. Remember that money you borrowed from "
-                  [:link lender]
-                  (rand-nth ["" [" back on " [:link [:places (:home lender)]]]])
-                  "? Well, "
-                  (rand-nth ["I’m here to collect it"
-                             "I’ve been sent to collect it"
-                             "it’s time to pay up"])
-                  "! "
-                  (rand-nth ["C" "Now, c"]) "an we" (rand-nth [" all" ""])
-                  " agree to do this the easy way?"]
-           :yes (if (db/can-afford? state 50)
-                  [[:spend 50]
-                   [:set-next-card pay-up]]
-                  [[:set-next-card cant-afford]])
-           :no [[:set-next-card fight]]}))}
 ])

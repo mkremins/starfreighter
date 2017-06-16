@@ -1,14 +1,20 @@
 (ns starfreighter.cards
-  (:require [starfreighter.cards.port :as port]
+  (:require [starfreighter.cards.bar :as bar]
+            [starfreighter.cards.loans :as loans]
+            [starfreighter.cards.port :as port]
             [starfreighter.cards.space :as space]
             [starfreighter.db :as db]
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
-(let [combine-preds #(cond-> %1 %2 (every-pred %2))]
+(let [port-cards
+      (for [card (concat port/cards bar/cards loans/cards)]
+        (update card :prereq #(or (some-> % (every-pred :docked?)) :docked?)))
+      space-cards
+      (for [card space/cards]
+        (update card :prereq #(or (some-> % (every-pred (complement :docked?))) (complement :docked?))))]
   (def all-cards
-    (into (mapv #(update % :prereq (partial combine-preds :docked?)) port/cards)
-          (mapv #(update % :prereq (partial combine-preds (complement :docked?))) space/cards))))
+    (into (vec port-cards) space-cards)))
 
 (defn interruptible?
   "Returns whether a given `card` is interruptible – i.e. whether it's OK (both

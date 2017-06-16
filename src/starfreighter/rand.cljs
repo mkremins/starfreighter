@@ -87,6 +87,7 @@
   [choices-with-weights]
   (let [choices-with-thresholds
         (reduce (fn [choices-with-thresholds [choice weight]]
+                  (assert (>= weight 0))
                   (let [threshold (+ weight (or (some-> choices-with-thresholds peek val) 0))]
                     (conj choices-with-thresholds [choice threshold])))
                 [] (seq choices-with-weights))
