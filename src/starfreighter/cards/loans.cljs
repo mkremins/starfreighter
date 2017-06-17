@@ -17,7 +17,7 @@
 {:id :offer-loan
  :prereq (every-pred (complement (db/can-afford? 30000)) (complement :loan-info))
  :bind   {:lender db/some-trusting-merchant}
- :weight #(util/bucket (:cash %) [[10 4] [20 3] [30 2]])
+ :weight #(util/bucket (:cash %) [[10000 4] [20000 3] [30000 2]])
  :gen (fn [{{:keys [lender]} :bound :as state}]
         (let [amount 40000] ; TODO procedurally vary this
           {:type :yes-no
