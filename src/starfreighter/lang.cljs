@@ -1,6 +1,7 @@
 (ns starfreighter.lang
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [clojure.string :as str]
-            [starfreighter.rand :as rand]))
+            [starfreighter.rand :as rand :refer [rand-nth]]))
 
 (def possible-expressions
   {;; long vowels
@@ -87,7 +88,7 @@
 (def stop?      (partial contains? all-stops))
 
 (defn gen-consonant-cluster [stops liquids sibilants]
-  (let [r (rand)]
+  (let [r (rand/rand)]
     (cond
       (< r 0.5)   (rand-nth stops)
       (< r 0.625) (rand-nth liquids)

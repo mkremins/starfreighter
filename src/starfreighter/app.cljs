@@ -1,4 +1,5 @@
 (ns starfreighter.app
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [clojure.string :as str]
             [om.core :as om]
             [om-tools.core :refer-macros [defcomponent]]

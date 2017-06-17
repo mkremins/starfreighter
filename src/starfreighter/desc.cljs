@@ -1,7 +1,16 @@
 (ns starfreighter.desc
-  (:require [clojure.string :as str]))
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
+  (:require [clojure.string :as str]
+            [starfreighter.rand :as rand :refer [rand-nth]]))
 
-;;; helpers for creating specific kinds of tags
+;;; helpers
+
+(defn comma-list [items]
+  (cond
+    (empty? items) ""
+    (= (count items) 1) (first items)
+    (= (count items) 2) [(first items) " and " (second items)]
+    :else (into (vec (interpose ", " (butlast items))) [", and " (last items)])))
 
 (defn dest-link [thing]
   [:link [:places (:destination thing)]])
@@ -44,27 +53,18 @@
       ;else
         "")]])
 
+(defmethod describe :place [place]
+  (binding [rand/*rng* (rand/rng (hash (:name place)))] ; ensure we pick the same text variations every time
+    (let [are #(rand-nth ["are " "include "])]
+      [[(subj place) " is an inhabited "
+        (rand-nth ["planetary " "solar " "star " ""]) "system. "
+        "The " (rand-nth ["dominant" "majority"]) " culture is "
+        (:name (:language place)) ". "
+        (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
+        "xports " (are) (comma-list (map name (:exports place))) ". "
+        (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
+        "mports " (are) (comma-list (map name (:imports place))) "."]
+       ["Our merchant contacts here " (are)
+        (comma-list (map #(-> [:link [:chars %]]) (:merchants place))) "."]])))
+
 (defmethod describe :default [{:keys [desc]}] desc)
-
-;;; pre-generate and cache :desc for places (to avoid issues with randomized bits being re-run)
-;;; TODO use a seeded RNG (where seed is e.g. place name) and generate these on the fly instead?
-
-(defn comma-list [items]
-  (cond
-    (empty? items) ""
-    (= (count items) 1) (first items)
-    (= (count items) 2) [(first items) " and " (second items)]
-    :else (into (vec (interpose ", " (butlast items))) [", and " (last items)])))
-
-(defn gen-place-desc [place]
-  (let [are #(rand-nth ["are " "include "])]
-    [[(subj place) " is an inhabited "
-      (rand-nth ["planetary " "solar " "star " ""]) "system. "
-      "The " (rand-nth ["dominant" "majority"]) " culture is "
-      (:name (:language place)) ". "
-      (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
-      "xports " (are) (comma-list (map name (:exports place))) ". "
-      (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
-      "mports " (are) (comma-list (map name (:imports place))) "."]
-     ["Our merchant contacts here " (are)
-      (comma-list (map #(-> [:link %]) (:merchants place))) "."]]))

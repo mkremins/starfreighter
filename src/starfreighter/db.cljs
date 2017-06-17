@@ -1,6 +1,6 @@
 (ns starfreighter.db
-  (:refer-clojure :exclude [char?])
-  (:require [starfreighter.rand :as rand]
+  (:refer-clojure :exclude [char? rand rand-int rand-nth shuffle])
+  (:require [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util :refer-macros [defcurried]]))
 
 ;;; queries

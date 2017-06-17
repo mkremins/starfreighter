@@ -1,7 +1,8 @@
 (ns starfreighter.cards.port
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
             [starfreighter.gen :as gen]
-            [starfreighter.rand :as rand]
+            [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
 
 (def ^:private base-bonus-amount 5000)

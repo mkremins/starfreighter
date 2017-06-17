@@ -1,6 +1,8 @@
 (ns starfreighter.cards.bar
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
-            [starfreighter.gen :as gen]))
+            [starfreighter.gen :as gen]
+            [starfreighter.rand :as rand :refer [rand-nth]]))
 
 ;; TODO
 ;; * Multiple possible outcomes (of which the fight-or-flight branch is only one)

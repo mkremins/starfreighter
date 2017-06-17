@@ -1,4 +1,5 @@
 (ns starfreighter.game
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.cards.bar :as bar]
             [starfreighter.cards.gambling :as gambling]
             [starfreighter.cards.loans :as loans]
@@ -84,7 +85,7 @@
       (when-let [passengers-to-drop (seq (db/passengers-to-drop state))]
         {:id :drop-passengers
          :type :info
-         :speaker (rand-nth passengers-to-drop)
+         :speaker (rand/rand-nth passengers-to-drop)
          :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
          :ok (for [char passengers-to-drop] [:drop-cargo char])})))
 
@@ -135,7 +136,7 @@
   (let [places (gen/gen-places)
         chars  (mapcat :merchants places)
         places (map #(update % :merchants (partial map :id)) places)
-        place  (rand-nth places)
+        place  (rand/rand-nth places)
         crew   (repeatedly 2 #(gen/gen-character place :crew))
         chars  (into chars crew)]
     {;; universe

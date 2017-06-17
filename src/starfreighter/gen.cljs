@@ -1,11 +1,11 @@
 (ns starfreighter.gen
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [clojure.math.combinatorics :as comb]
             [clojure.set :as set]
             [clojure.string :as str]
             [starfreighter.db :as db]
-            [starfreighter.desc :as desc]
             [starfreighter.lang :as lang]
-            [starfreighter.rand :as rand]
+            [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
 
 (let [next-id (atom 0)]
@@ -59,7 +59,7 @@
    "Z" "Zee"})
 
 (defn gen-nickname [fname lname]
-  (util/bucket (rand)
+  (util/bucket (rand/rand)
     [[.9  nil]
      [.95 (rand-nth nicknames)]
      [ 1  (get single-letter-nicknames (first fname) (first fname))]]))
@@ -185,9 +185,8 @@
                    :exports exports
                    :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                    :language lang}
-        merchants (repeatedly (rand-nth [3 3 4]) #(gen-character place :merchant))
-        place     (assoc place :merchants merchants)]
-    (assoc place :desc (desc/gen-place-desc place))))
+        merchants (repeatedly (rand-nth [3 3 4]) #(gen-character place :merchant))]
+    (assoc place :merchants merchants)))
 
 (defn gen-places []
   (let [;; 1. generate a group of 3-7 places for each of 5 generated languages

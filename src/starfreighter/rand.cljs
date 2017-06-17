@@ -1,5 +1,35 @@
 (ns starfreighter.rand
-  (:require [starfreighter.util :as util]))
+  "Various utilities for working with randomness and generator fns."
+  (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
+  (:require [rand-cljc.core :as rng]
+            [starfreighter.util :as util]))
+
+;;; rebindable RNG stuff
+
+(def ^:dynamic *rng*
+  "The current RNG for the entire game. For controllable randomness, can be
+  rebound to an RNG constructed with an explicit seed."
+  (rng/rng))
+
+(def rng
+  "Re-export the `rand-cljc.core/rng` RNG constructor fn so that consumers of
+  this namespace don't need to import it separately."
+  rng/rng)
+
+(defn rand
+  ([] (rng/rand *rng*))
+  ([n] (rng/rand *rng* n)))
+
+(defn rand-int [n]
+  (rng/rand-int *rng* n))
+
+(defn rand-nth [coll]
+  (rng/rand-nth *rng* coll))
+
+(defn shuffle [coll]
+  (rng/shuffle *rng* coll))
+
+;;; actually novel fns
 
 (defn approx-normal-rand
   "Returns approximately normally distributed random numbers between 0 and 1.
