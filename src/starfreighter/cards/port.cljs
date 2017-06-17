@@ -246,8 +246,8 @@
                     [(rand-nth ["the rest of the crew and I" "we"]) " were"])
                   " wondering if " (rand-nth ["maybe " ""]) (if just-one? "I" "we")
                   " might be due a small bonus for everything " (if just-one? "I" "we")
-                  " do" (rand-nth ["." " around here."]) " " [:cash base-bonus-amount]
-                  " each seems pretty fair…"]
+                  " do" (rand-nth ["" " around here"]) ". " [:cash base-bonus-amount]
+                  (when-not just-one? " each") " seems pretty fair…"]
            :yes [[:spend amount]
                  [:add-whole-crew-memory :gave-bonus]]
            :no [[:add-whole-crew-memory :declined-bonus-request]]}))}
