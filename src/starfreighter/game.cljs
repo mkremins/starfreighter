@@ -70,32 +70,23 @@
       nil))
 
 (defn applicable-arrival-if-any [state]
-  (cond
-    ;; drop off (and cash in) cargo you're supposed to deliver
-    (db/has-cargo-to-drop? state)
-      (let [[dropping keeping]
-            (util/sift #(and (not (:passenger? %))
-                             (= (:destination %) (:location state)))
-                       (:cargo state))]
+  (or ;; drop off (and cash in) cargo you're supposed to deliver
+      (when-let [cargo-to-drop (seq (db/cargo-to-drop state))]
         {:id :drop-cargo
          :type :info
          :speaker (db/some* state db/crew)
          :text "I’ll go drop off the goods we’re supposed to deliver."
-         :ok (into [[:call #(assoc % :cargo (vec keeping))]
-                    [:earn (reduce + (map :pay dropping))]]
-                   (for [{:keys [merchant]} dropping :when merchant]
-                     [:add-memory merchant :completed-delivery]))})
-    ;; drop off passengers you're supposed to deliver
-    (db/has-passengers-to-drop? state)
-      (let [[dropping keeping]
-            (util/sift #(and (:passenger? %)
-                             (= (:destination %) (:location state)))
-                       (:cargo state))]
+         :ok (flatten1 (for [item cargo-to-drop]
+                         [[:drop-cargo item]
+                          [:earn (:pay-after item)]
+                          [:add-memory (:merchant item) :completed-delivery]]))})
+      ;; drop off passengers you're supposed to deliver
+      (when-let [passengers-to-drop (seq (db/passengers-to-drop state))]
         {:id :drop-passengers
          :type :info
-         :speaker (rand-nth dropping)
+         :speaker (rand-nth passengers-to-drop)
          :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
-         :ok [[:call #(assoc % :cargo (vec keeping))]]})))
+         :ok (for [char passengers-to-drop] [:drop-cargo char])})))
 
 (defn try-pick [state metacard]
   (when (and (or (:repeatable? metacard)

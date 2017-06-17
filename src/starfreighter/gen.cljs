@@ -143,7 +143,8 @@
                             (<= rep 30) (rand/weighted-choice {true 3 false 3})
                             (<= rep 40) (rand/weighted-choice {true 4 false 2})
                             (<= rep 50) (rand/weighted-choice {true 5 false 1}))]
-      {:name        (rand-nth (:exports (db/current-place state)))
+      {:type        :cargo
+       :name        (rand-nth (:exports (db/current-place state)))
        :destination dest
        :distance    dist
        :merchant    merchant
@@ -162,7 +163,8 @@
 (defn gen-goods-for-sale [state]
   (when-let [seller (db/some-trusting-merchant state)]
     (let [stuff (db/rand-export state)]
-      {:name   stuff
+      {:type   :cargo
+       :name   stuff
        :seller seller
        :price  (* 3 (rand-base-price seller) 1000)
        :counterfeit?

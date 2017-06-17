@@ -1,20 +1,53 @@
 (ns starfreighter.desc
   (:require [clojure.string :as str]))
 
-(defn gen-description [thing]
-  (case (:type thing)
-    :char
-      [[[:subject (:name thing)] " is a person from " [:link [:places (:home thing)]] ". "
-        "They belong to the " (:culture thing) " culture. "
-        (case (:role thing)
-          :crew
-            "They are a member of our crew."
-          :merchant
-            "They are a merchant."
-          ;else
-            "")]]
-    ;else
-      (:desc thing)))
+;;; helpers for creating specific kinds of tags
+
+(defn dest-link [thing]
+  [:link [:places (:destination thing)]])
+
+(defn home-link [char]
+  [:link [:places (:home char)]])
+
+(defn subj [thing]
+  [:subject (:name thing)])
+
+;;; main entry point
+
+(defmulti describe :type)
+
+(defmethod describe :cargo
+  [{:keys [merchant pay-before pay-after seller], dest :destination :as item}]
+  [["A shipment of " (subj item)
+    (when dest [", bound for " (dest-link item)]) ". "
+    (when merchant
+      (if (pos? pay-before)
+        ["We received " [:cash pay-before] " from " [:link merchant]
+         " at " (home-link merchant) " for agreeing to deliver this cargo, and will receive "
+         [:cash pay-after] " more when we drop it off at " dest "."]
+        ["We will receive " [:cash pay-after] " in payment from " [:link merchant]
+         " (a merchant at " (home-link merchant) ") when we drop it off at " dest ". "]))
+    (when seller
+      ["We bought this " (:name item) " from " [:link seller] " at " (home-link seller)
+       " for " [:cash (:price item)] "."])]])
+
+(defmethod describe :char [char]
+  [[(subj char) " is a person from " (home-link char) ". "
+    "They belong to the " (:culture char) " culture. "
+    (case (:role char)
+      :crew
+        "They are a member of our crew."
+      :merchant
+        "They are a merchant."
+      :passenger
+        ["They are a passenger en route to " (dest-link char) "."]
+      ;else
+        "")]])
+
+(defmethod describe :default [{:keys [desc]}] desc)
+
+;;; pre-generate and cache :desc for places (to avoid issues with randomized bits being re-run)
+;;; TODO use a seeded RNG (where seed is e.g. place name) and generate these on the fly instead?
 
 (defn comma-list [items]
   (cond
@@ -25,7 +58,7 @@
 
 (defn gen-place-desc [place]
   (let [are #(rand-nth ["are " "include "])]
-    [[[:subject (:name place)] " is an inhabited "
+    [[(subj place) " is an inhabited "
       (rand-nth ["planetary " "solar " "star " ""]) "system. "
       "The " (rand-nth ["dominant" "majority"]) " culture is "
       (:name (:language place)) ". "

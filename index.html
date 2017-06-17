@@ -56,8 +56,14 @@
   .card .speaker:empty:after {
     content: "";
   }
+  .card .speaker .info-link {
+    color: tan; /* different default info-link color for speakers, at least for now */
+  }
   .card .speaker.crew .info-link {
     color: lightgreen; /* distinguish when crew are talking vs anyone else */
+  }
+  .card .speaker.merchant .info-link {
+    color: lightblue; /* distinguish when merchants are talking vs anyone else */
   }
   .card .game-over {
     font-weight: bold;

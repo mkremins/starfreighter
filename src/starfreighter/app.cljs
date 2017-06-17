@@ -104,7 +104,7 @@
               cash))
           " ")))))
 
-(defcomponent crew-slot [data owner]
+(defcomponent slot [data owner]
   (render [_]
     (dom/p {:class "slot crew"}
       (if data
@@ -119,15 +119,7 @@
       (let [crew (vec (db/crew data))]
         (dom/div {}
           (for [i (range (:max-crew data))]
-            (om/build crew-slot (get crew i))))))))
-
-(defcomponent cargo-slot [data owner]
-  (render [_]
-    (dom/p {:class "slot cargo"}
-      (if data
-        (dom/span {} (:name data))
-        " ")
-      (om/build slot-details data))))
+            (om/build slot (get crew i))))))))
 
 (defcomponent cargo-list [data owner]
   (render [_]
@@ -135,7 +127,7 @@
       (dom/h2 "Cargo")
       (dom/div {}
         (for [i (range (:max-cargo data))]
-          (om/build cargo-slot (get (:cargo data) i)))))))
+          (om/build slot (get (:cargo data) i)))))))
 
 ;;; map rendering stuff
 
@@ -179,15 +171,14 @@
     (let [{:keys [destination docked? info-target location places]} data
           place-points (layout-places places)
           target-place (when (= (:type info-target) :place) info-target)
-          set-target!  (fn [target ev]
-                         (.stopPropagation ev)
-                         (om/update! data :info-target target))]
+          set-target!  (fn [target]
+                         #(do (.stopPropagation %)
+                              (om/update! data :info-target target)))]
       (dom/svg
         {:class "galaxy-map"
          :xmlns "http://www.w3.org/2000/svg"
          :width map-size :height map-size
-         :viewBox (str "0 0 " map-size " " map-size)
-         :on-click (partial set-target! nil)}
+         :viewBox (str "0 0 " map-size " " map-size)}
         ;; draw connections
         (let [target-path (some->> target-place (db/pathfind data) set)
               travel-ends [location destination]
@@ -220,11 +211,11 @@
               (dom/g {:class (cond-> "map-location" here? (str " here") target? (str " target"))}
                 (dom/circle
                   {:cx x :cy y :r radius :fill color
-                   :on-click (partial set-target! place)})
+                   :on-click (set-target! place)})
                 (dom/text
                   {:x x :y (- y (+ radius 4))
                    :text-anchor "middle" :font-size 12
-                   :on-click (partial set-target! place)}
+                   :on-click (set-target! place)}
                   (dom/tspan (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
                   (dom/tspan name))))))
         ;; draw indicator of current location/travel
@@ -249,12 +240,15 @@
                           (and (:docked? data) (db/current-place data))
                           (get-in data [:places (:destination data)]))]
       (dom/div {:class "info-box"}
-        (for [paragraph (desc/gen-description target)]
+        (for [paragraph (desc/describe target)]
           (dom/p (om/build-all content-span paragraph)))))))
 
 (defcomponent app [data owner]
   (render [_]
-    (dom/div {:class "app"}
+    (dom/div {:class "app"
+              ;; clicking anywhere *except* on an info link should reset :info-target
+              :on-click #(do (.stopPropagation %)
+                             (om/update! data :info-target nil))}
       (dom/div {:class "left"}
         (om/build stats-view data)
         (om/build card-view (:card data))

@@ -1,4 +1,5 @@
 (ns starfreighter.db
+  (:refer-clojure :exclude [char?])
   (:require [starfreighter.rand :as rand]
             [starfreighter.util :as util :refer-macros [defcurried]]))
 
@@ -25,6 +26,18 @@
   predicate `pred`."
   [state pred]
   (or (pred state) nil))
+
+
+;;; generic predicates
+
+(defn char? [thing]
+  (= (:type thing) :char))
+
+(defcurried headed-to? [thing loc]
+  (= (:destination thing) loc))
+
+(defn headed-here? [state]
+  (headed-to? (:location state)))
 
 
 ;;; stats
@@ -251,28 +264,24 @@
   (comp pos? open-cargo-slots))
 
 (defcurried add-cargo [state cargo]
-  (update state :cargo conj cargo))
+  (let [cargo (cond-> cargo (char? cargo) (assoc :role :passenger))]
+    (update state :cargo conj cargo)))
 
 (defcurried drop-cargo [state cargo]
   ;; TODO will cheat people out of duplicates if they have any
   (update state :cargo (comp vec (partial remove #{cargo}))))
 
 (defn passengers [state]
-  (filter :passenger? (:cargo state)))
+  (filter char? (:cargo state)))
 
-(defn has-cargo-to-drop? [state]
-  (some #(and (not (:passenger? %))
-              (= (:destination %) (:location state)))
-        (:cargo state)))
+(defn cargo-to-drop [state]
+  (->> state :cargo (remove char?) (filter (headed-here? state))))
 
-(defn has-passengers-to-drop? [state]
-  (some #(= (:destination %) (:location state)) (passengers state)))
+(defn passengers-to-drop [state]
+  (filter (headed-here? state) (passengers state)))
 
 (defn freely-sellable? [cargo]
-  (not (or (:passenger? cargo) (:destination cargo))))
-
-(defn has-freely-sellable-cargo? [state]
-  (some freely-sellable? (:cargo state)))
+  (not (or (char? cargo) (:destination cargo))))
 
 (defn some-sellable-cargo [state]
   (let [exports (set (:exports (current-place state)))
