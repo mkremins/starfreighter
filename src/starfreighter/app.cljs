@@ -7,7 +7,6 @@
             [starfreighter.db :as db]
             [starfreighter.desc :as desc]
             [starfreighter.game :as game]
-            [starfreighter.geom :as geom]
             [starfreighter.util :as util]))
 
 (enable-console-print!)
@@ -135,42 +134,9 @@
 (def ^:private map-colors ["lightcoral" "gold" "darkseagreen" "cadetblue" "mediumpurple" "lightsalmon"])
 (def ^:private map-size 480)
 
-(defn- build-core-ring [places]
-  (loop [ring [(:name (first (filter :hub? (vals places))))]]
-    (let [prev (get places (peek ring))
-          belongs-in-ring?
-          (fn [place]
-            (or (:hub? place)
-                (and (:border? place)
-                     (or (:hub? prev)
-                         (not= (:name (:language place)) (:name (:language prev)))))))]
-      (if-let [next
-               (->> (:connections prev)
-                    (remove (set ring))
-                    (map places)
-                    (filter belongs-in-ring?)
-                    (first))]
-        (recur (conj ring (:name next)))
-        ring))))
-
-(defn- layout-places [places]
-  (let [core-ring    (build-core-ring places)
-        ring-angles  (zipmap core-ring (range 0 360 (/ 360 (count core-ring))))
-        map-center   {:x (/ map-size 2) :y (/ map-size 2)}
-        place-points (zipmap core-ring (map #(geom/displace map-center (ring-angles %) 140) core-ring))]
-    (apply merge place-points
-      (for [hub (filter (comp :hub? places) core-ring)
-            :let [angle (get ring-angles hub)
-                  point (get place-points hub)
-                  non-ring-spokes (remove place-points (get-in places [hub :connections]))
-                  spoke-angles (rest (range (- angle 90) (+ angle 90) (/ 180 (inc (count non-ring-spokes)))))
-                  spoke-points (map #(geom/displace point % 70) spoke-angles)]]
-        (zipmap non-ring-spokes spoke-points)))))
-
 (defcomponent galaxy-map [data owner]
   (render [_]
     (let [{:keys [destination docked? info-target location places]} data
-          place-points (layout-places places)
           target-place (when (= (:type info-target) :place) info-target)
           set-target!  (fn [target]
                          #(do (.stopPropagation %)
@@ -192,7 +158,7 @@
                   :let [here?   (and (not docked?) (= (set conn-ends) (set travel-ends)))
                         ends    (if here? travel-ends conn-ends)
                         target? (every? (partial contains? target-path) ends)
-                        [p1 p2] (map place-points ends)]]
+                        [p1 p2] (map places ends)]]
               (dom/line
                 {:class (cond here? "here" target? "target")
                  :x1 (:x p1) :y1 (:y p1) :x2 (:x p2) :y2 (:y p2)}))))
@@ -201,9 +167,8 @@
               lang-colors (zipmap lang-names map-colors)
               job-dests   (set (map :destination (:cargo data)))]
           (dom/g {:class "places"}
-            (for [{:keys [name] :as place} (vals places)
-                  :let [{:keys [x y]} (get place-points name)
-                        color   (get lang-colors (:name (:language place)))
+            (for [{:keys [x y name] :as place} (vals places)
+                  :let [color   (get lang-colors (:name (:language place)))
                         dest?   (and (not docked?) (= name destination))
                         here?   (or (= name location) dest?)
                         job?    (contains? job-dests name)

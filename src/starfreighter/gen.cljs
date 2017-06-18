@@ -4,6 +4,7 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [starfreighter.db :as db]
+            [starfreighter.geom :as geom]
             [starfreighter.lang :as lang]
             [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
@@ -188,52 +189,99 @@
         merchants (repeatedly (rand-nth [3 3 4]) #(gen-character place :merchant))]
     (assoc place :merchants merchants)))
 
+(defn- point-is-ok? [points {:keys [x y] :as point}]
+  (and (<= 40 x 440) (<= 40 y 420)
+       (every? #(>= (geom/distance % point) 55) (remove #{point} points))))
+
+(defn- place-points []
+  (let [start {:id (gen-id)
+               :x (rand/rand-int* 120 360)
+               :y (rand/rand-int* 120 360)
+               :connections #{}}]
+    (loop [points   {(:id start) start}
+           frontier #{(:id start)}]
+      (if (pos? (count frontier))
+        (let [parent (get points (rand/rand-nth (vec frontier)))
+              offset (rand/rand-int* 0 60)
+              angles (->> (iterate #(+ % (rand/rand-int* 60 120)) (rand/rand-int* 0 60))
+                          (take-while #(< % 360)))
+              dists  (repeatedly (count angles) #(rand/rand-int* 55 80))
+              kids   (map (partial geom/displace parent) angles dists)
+              kids   (->> (filter (partial point-is-ok? (into (vals points) kids)) kids)
+                          (map #(assoc % :id (gen-id) :connections #{(:id parent)})))]
+          (recur
+            (-> (update-in points [(:id parent) :connections] into (map :id kids))
+                (merge (util/indexed-by :id kids)))
+            (-> (disj frontier (:id parent))
+                (into (map :id kids)))))
+        points))))
+
+(defn- should-connect? [p1 p2]
+  (util/bucket (geom/distance p1 p2)
+    [[70  (rand/chance 0.8)]
+     [75  (rand/chance 0.6)]
+     [80  (rand/chance 0.3)]
+     [90  (rand/chance 0.1)]
+     [100 (rand/chance 0.05)]
+     [500 false]]))
+
+(defn- make-extra-connections [points]
+  (let [pairs (->> (comb/combinations (vals points) 2)
+                   (sort-by #(geom/distance (first %) (second %)))
+                   ;(take-while #(< (geom/distance (first %) (second %)) 75))
+                   (filter #(should-connect? (first %) (second %))))]
+    (reduce (fn [points [{id1 :id} {id2 :id}]]
+              (-> points (update-in [id1 :connections] conj id2)
+                         (update-in [id2 :connections] conj id1)))
+            points pairs)))
+
+(defn- spread-cultures [points]
+  (loop [points points]
+    (let [groups        (group-by (comp :language points) (keys points)) ; map culture => list of claimed IDs
+          unclaimed-ids (set (get groups nil))]
+      (if (empty? unclaimed-ids)
+        points ; nowhere to expand to, so we must be done
+        (let [groups (dissoc groups nil)
+              group-frontiers ; map culture => "frontier" (set of unclaimed neighbor IDs)
+              (->> (vals groups)
+                   (map #(mapcat (comp :connections points) %))
+                   (map #(set/intersection (set %) unclaimed-ids))
+                   (zipmap (keys groups)))
+              [group-to-expand frontier]
+              (->> group-frontiers
+                   (filter (comp pos? count val))    ; ignore groups with no unclaimed neighbors
+                   (sort-by (comp count groups key)) ; groups with fewer points already claimed go first
+                   (first))
+              _ (assert (pos? (count frontier))) ; if we got this far, we must have somewhere to expand to
+              expand-to-id (rand/rand-nth (vec frontier))]
+          (recur (assoc-in points [expand-to-id :language] group-to-expand)))))))
+
+(defn- points->places [points]
+  (loop [points points
+         places []
+         names  #{}]
+    (if-let [point (first points)]
+      ;; need to make sure the name isn't already taken by an earlier generated place
+      (let [place (rand/restrict #(not (contains? names (:name %))) gen-place (:language point))]
+        (recur (rest points) (conj places (merge point place)) (conj names (:name place))))
+      places)))
+
 (defn gen-places []
-  (let [;; 1. generate a group of 3-7 places for each of 5 generated languages
-        groups
-        (for [lang (repeatedly 5 lang/gen-language)
-              :let [group-size (rand/rand-int* 3 7)]]
-          (rand/unique-runs-by :name group-size gen-place lang))
-        name-groups
-        (map (partial map :name) groups)
-        ;; 2. within each group, connect the first place ("hub") to the others ("spokes")
-        connections
-        (reduce (fn [connections [hub & spokes]]
-                  (assoc connections hub (set spokes)))
-                {} name-groups)
-        ;; 3. within each group, randomly make a few internal connections between spokes
-        connections
-        (reduce (fn [connections [_ & spokes]]
-                  (let [pairs (comb/combinations spokes 2)]
-                    (->> pairs
-                         (rand/pick-n (rand/rand-int* 1 (dec (count pairs))))
-                         (map (fn [[a b]] {a #{b}}))
-                         (apply merge-with set/union connections))))
-                connections name-groups)
-        ;; 4. make a single spoke-to-spoke connection from each group to the next
-        [connections borders]
-        (loop [connections connections
-               borders #{} ; remember which places already have an outgroup connection
-                           ; (so we don't accidentally use the same place twice)
-               group-pairs (partition 2 1 name-groups name-groups)]
-          (if-let [[[_ & spokes-a] [_ & spokes-b]] (first group-pairs)]
-            (let [spoke-a (rand-nth (remove borders spokes-a))
-                  spoke-b (rand-nth (remove borders spokes-b))]
-              (recur (update connections spoke-a (fnil conj #{}) spoke-b)
-                     (into borders [spoke-a spoke-b])
-                     (rest group-pairs)))
-            [connections borders]))
-        ;; 5. mirror all connections (so they'll work both ways)
-        connections
-        (reduce (fn [connections [origin destinations]]
-                  (->> (for [dest destinations] {dest #{origin}})
-                       (apply merge-with set/union connections)))
-                connections connections)]
-    (->> ;; 6. mark the first place in each group as a hub
-         (map (fn [[hub & spokes]] (conj spokes (assoc hub :hub? true))) groups)
-         ;; 7. flatten the list of groups of places into a flat list of places
-         (reduce into [])
-         ;; 8. update each place with the set of other places it's connected to,
-         ;;    and whether or not it's on the border between two groups
-         (map #(assoc % :connections (vec (get connections (:name %)))
-                        :border? (contains? borders (:name %)))))))
+  (let [;; 1. generate 5-6 distinct cultures
+        cultures (repeatedly (rand/rand-int* 5 6) lang/gen-language)
+        ;; 2. starting at the center of the map, build a network of points
+        points   (place-points)
+        ;; 3. make some random connections between nearby points
+        points   (make-extra-connections points)
+        ;; 4. "claim" one random point as the "hub" for each culture
+        points   (reduce (fn [points [id culture]]
+                           (update points id assoc :hub? true :language culture))
+                         points
+                         (zipmap (rand/shuffle (keys points)) cultures))
+        ;; 5. iteratively spread cultures to unclaimed adjacent points until all points are claimed
+        points   (spread-cultures points)
+        ;; 6. transform all points into "places" (i.e. generate a name, merchants, etc)
+        places   (util/indexed-by :id (points->places (vals points)))]
+    ;; 7. use names, not IDs, as keys for connections
+    ;; (TODO switch to using IDs as the primary keys for places throughout the game?)
+    (map #(update % :connections (partial mapv (comp :name places))) (vals places))))

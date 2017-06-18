@@ -12,9 +12,15 @@
 (defn cos [deg]
   (js/Math.cos (deg->rad deg)))
 
+(defn square [n]
+  (* n n))
+
 (defn displace [point angle distance]
   {:x (+ (:x point) (* distance (sin angle)))
    :y (+ (:y point) (* distance (cos angle)))})
+
+(defn distance [{x1 :x y1 :y} {x2 :x y2 :y}]
+  (js/Math.sqrt (+ (square (- x2 x1)) (square (- y2 y1)))))
 
 (defn interpolate [{x1 :x y1 :y} {x2 :x y2 :y} frac-dist]
   {:x (+ (* (- x2 x1) frac-dist) x1)
