@@ -177,12 +177,48 @@
 ;;; places
 
 (def goods
-  ["antimatter" "carbon dioxide" "dark matter" "fertilizer" "grain" "medicine" "oxygen" "spice"])
+  ["antimatter" "carbon dioxide" "computronium" "dark matter" "exotic matter" "explosives"
+   "fertilizer" "gold" "grain" "livestock" "medicine" "metamatter" "oxygen" "spice" "synthstim"
+   "weapons" "water"])
+
+(def modules
+  [{:template :agriculture
+    :imports ["water" "fertilizer"]
+    :exports ["grain" "livestock"]}
+   {:template :aristocracy}
+   {:template :corruption}
+   {:template :diplomacy}
+   {:template :gambling}
+   {:template :hospital}
+   {:template :independence
+    :imports ["explosives" "weapons"]}
+   {:template :megacorp}
+   {:template :mining
+    :exports ["gold"]
+    :imports ["explosives"]}
+   {:template :neutral}
+   {:template :piracy}
+   {:template :prohibition}
+   {:template :quarantine
+    :imports ["medicine"]}
+   {:template :reactor
+    :exports ["antimatter" "dark matter" "exotic matter"]}
+   {:template :religion}
+   {:template :shipyard}
+   {:template :tourism
+    :excludes #{:warzone}}
+   {:template :warzone
+    :imports ["explosives" "weapons"]
+    :excludes #{:tourism}}
+   {:template :weapons
+    :exports ["explosives" "weapons"]}])
 
 (defn gen-place [lang]
-  (let [exports   (rand/pick-n 3 goods)
+  (let [modules   (rand/pick-n 3 modules)
+        exports   (rand/pick-n 3 goods)
         place     {:type :place
                    :name (str/capitalize (lang/gen-word lang))
+                   :modules modules
                    :exports exports
                    :imports (set (rand/pick-n 2 (remove (set exports) goods)))
                    :language lang}
