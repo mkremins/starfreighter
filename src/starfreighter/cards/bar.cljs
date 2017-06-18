@@ -108,13 +108,48 @@
                                  "Reckon you oughta be on your way now."]])
                :yes [[:set-next-card walk-away]]
                :no [[:set-next-card bar-fight]]}
+              order-drink
+              {:type :info
+               :speaker {:name "Bartender"}
+               :text "Well, alright then – suit yerself."
+               :ok [[:set-next-card confrontation]]}
+              a-round-on-me
+              {:type :info
+               :speaker {:name "Bartender"}
+               :text ["Next round’s on you? Must be feelin’ mighty generous! "
+                      (when (contains? (:recent-picks state) :roll-the-dice)
+                        "What, didja do well down at the casino or somethin’?")]
+               :ok [[:add-whole-crew-memory :went-out-drinking]]}
               walk-to-bar
-              {:type :yes-no
+              {:type :custom
                :speaker {:name "Bartender"}
                :text "So, what’ll it be? You havin’ anything?"
-               :yes [[:spend 50]
-                     [:set-next-card confrontation]]
-               :no [[:set-next-card confrontation]]}]
+               :choices
+               [{:icon "👎"
+                 :background "brown"
+                 :effects [[:set-next-card order-drink]]}
+                {:icon "💧"
+                 :background "steelblue"
+                 :effects [[:set-next-card order-drink]]}
+                {:icon "🍺"
+                 :background "steelblue"
+                 :effects [[:spend 25]
+                           [:set-next-card
+                            (-> order-drink
+                                (assoc :text "One pint o’ the good stuff, comin’ right up.")
+                                (update :effects conj [:add-memory speaker :went-out-drinking]))]]}
+                {:icon (rand-nth ["🍷" "🍶" "🍸" "🍹"])
+                 :background "steelblue"
+                 :effects [[:spend 50]
+                           [:add-memory speaker :went-out-drinking]
+                           [:set-next-card
+                            (-> order-drink
+                                (assoc :text "Feelin’ fancy, are we?")
+                                (update :effects conj [:add-memory speaker :went-out-drinking]))]]}
+                {:icon "🍻"
+                 :background "steelblue"
+                 :effects [[:spend 1000]
+                           [:set-next-card a-round-on-me]]}]}]
           {:type :yes-no
            :speaker speaker
            :text ["Hey, Cap’n – have you even left the ship since we got into port? "

@@ -126,6 +126,7 @@
    :went-gambling-did-poorly +5
    :went-gambling-broke-even +10
    :went-gambling-did-well +15
+   :went-out-drinking +10
    :crewmate-resigned +5
    :visited-home +5
    :fixed-engine +10

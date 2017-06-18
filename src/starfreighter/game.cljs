@@ -28,13 +28,19 @@
     (:interruptible? card)
     (some (comp empty? :effects) (:choices card))))
 
+(defn affordable? [state choice]
+  (let [total-cost (reduce + (map second (filter #(= (first %) :spend) (:effects choice))))]
+    (db/can-afford? state total-cost)))
+
 (declare restart-game) ; so that we can refer to this fn as the effect of a :game-over card
 
-(defn compile-choices [card]
+(defn compile-choices [state card]
   (assoc card :choices
     (case (:type card)
       :custom
-        (:choices card)
+        (let [choices (filter (partial affordable? state) (:choices card))]
+          (assert (> (count choices) 0))
+          choices)
       :game-over
         [{:icon (if (:deadly? card) "☠️" "🔁")
           :background "brown" ; TODO move literal colors back out into CSS?
@@ -50,7 +56,7 @@
 (defn prepare-to-depart [state]
   (let [dest (:info-target state)]
     (assoc state :card
-      (compile-choices
+      (compile-choices state
         {:id :prepare-to-depart
          :type :yes-no
          :interruptible? false
@@ -118,8 +124,8 @@
           :advance-time? (not (:deck state)) ; generally, only "top-level" cards should advance time
           :id (:id picked)))))
 
-(def draw-next-card
-  (comp compile-choices draw-next-card*))
+(defn draw-next-card [state]
+  (compile-choices state (draw-next-card* state)))
 
 (defn handle-choice [state effects]
   (let [state' (db/process-effects state effects)
