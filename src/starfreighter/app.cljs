@@ -72,15 +72,16 @@
    :injured     "🤕"
    :sick        "🤒"})
 
-(defcomponent stats-view [data owner]
+(defcomponent status-bar [data owner]
   (render [_]
-    (dom/div {:class "stats"}
-      (dom/span {:class "cash-stat"} (:cash data))
-      (dom/span {:class "ship-stat"} (:ship data))
-      (dom/span {:class "mood-stat"} (mood->icon (db/avg-crew-mood data)))
-      (dom/span {:class "crew-stat"} (count (:crew data)) "/" (:max-crew data))
-      (dom/span {:class "hold-stat"} (count (:cargo data)) "/" (:max-cargo data))
-      (dom/span {:class "time-stat"} (:turn data)))))
+    (dom/div {:class "status-bar"}
+      (dom/span {:class "status cash"} (:cash data))
+      (dom/span {:class "status ship"} (:ship data))
+      (dom/span {:class "status mood"} (mood->icon (db/avg-crew-mood data)))
+      (dom/span {:class (str "status here " (if (:docked? data) "port" "space"))}
+        (om/build info-link
+          [:places (if (:docked? data) (:location data) (:destination data))]))
+      (dom/span {:class "status time"} (:turn data)))))
 
 (defcomponent slot-details [data owner]
   (render [_]
@@ -134,7 +135,7 @@
 (def ^:private map-colors ["lightcoral" "gold" "darkseagreen" "cadetblue" "mediumpurple" "lightsalmon"])
 (def ^:private map-size 480)
 
-(defcomponent galaxy-map [data owner]
+(defcomponent starmap [data owner]
   (render [_]
     (let [{:keys [destination docked? info-target location places]} data
           target-place (when (= (:type info-target) :place) info-target)
@@ -142,7 +143,7 @@
                          #(do (.stopPropagation %)
                               (om/update! data :info-target target)))]
       (dom/svg
-        {:class "galaxy-map"
+        {:class "starmap"
          :xmlns "http://www.w3.org/2000/svg"
          :width map-size :height map-size
          :viewBox (str "0 0 " map-size " " map-size)}
@@ -184,11 +185,6 @@
                    :on-click (set-target! place)}
                   (dom/tspan (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
                   (dom/tspan name))))))
-        ;; draw indicator of current location/travel
-        (dom/text {:class "whereami"
-                   :x (cond-> 12 docked? (- 4)) :y 462
-                   :text-anchor "start" :font-size 18}
-          (if docked? (str "📍 " location) (str "➡️ " destination)))
         ;; draw button to depart for target (if any)
         (when (some-> target-place :name (not= location))
           (let [enabled? (and docked? (game/interruptible? (:card data)))]
@@ -216,14 +212,14 @@
               :on-click #(do (.stopPropagation %)
                              (om/update! data :info-target nil))}
       (dom/div {:class "left"}
-        (om/build stats-view data)
+        (om/build status-bar data)
         (om/build card-view (:card data))
         (om/build choice-buttons data)
         (dom/div {:class "lists"}
           (om/build crew-list data)
           (om/build cargo-list data)))
       (dom/div {:class "right"}
-        (om/build galaxy-map data)
+        (om/build starmap data)
         (om/build info-box data)))))
 
 (defn init! []

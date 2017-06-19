@@ -29,12 +29,26 @@
   .right {
     width: 480px;
   }
-  /* text content */
+
+  /* TEXT CONTENT */
+
+  .cash-value {
+    color: yellowgreen;
+    line-height: .9;  /* cancel out emoji expansion of line height to 1.1 */
+    white-space: pre; /* prevent linebreaks between :before, main content, and :after */
+  }
+  .cash-value:before {
+    content: "💰";
+    position: relative;
+    top: 2px; /* seems to look slightly better than having the bottom of the bag sitting at the baseline */
+  }
   .info-link {
     color: lightblue;
     cursor: pointer;
   }
-  /* card */
+
+  /* CARD */
+
   .card {
     background: #555;
     border: 1px solid #aaa;
@@ -46,7 +60,7 @@
     padding: 1em;
   }
   .card .speaker {
-    color: tan;
+    color: burlywood;
     font-weight: bold;
   }
   .card .speaker:after {
@@ -57,7 +71,7 @@
     content: "";
   }
   .card .speaker .info-link {
-    color: tan; /* different default info-link color for speakers, at least for now */
+    color: burlywood; /* different default info-link color for speakers, at least for now */
   }
   .card .speaker.crew .info-link {
     color: lightgreen; /* distinguish when crew are talking vs anyone else */
@@ -70,17 +84,9 @@
     margin-top: 1em;
     text-align: center;
   }
-  .cash-value {
-    color: yellowgreen;
-    line-height: .9;  /* cancel out emoji expansion of line height to 1.1 */
-    white-space: pre; /* prevent linebreaks between :before, main content, and :after */
-  }
-  .cash-value:before {
-    content: "💰";
-    position: relative;
-    top: 2px; /* seems to look slightly better than having the bottom of the bag sitting at the baseline */
-  }
-  /* choices */
+
+  /* CHOICES */
+
   .choices {
     display: flex;
     margin-bottom: 30px;
@@ -103,38 +109,60 @@
   .choice:last-child {
     border-bottom-right-radius: 9px;
   }
-  /* stats */
-  .stats {
+
+  /* STATUS BAR */
+
+  .status-bar {
     display: flex;
     flex-flow: row wrap;
     font-size: 22px;
     margin-bottom: 10px;
   }
-  .stats .cash-stat { color: yellowgreen; }
-  .stats .cash-stat:before { content: "💰 "; }
-  .stats .ship-stat { color: rgb(255, 106, 53); }
-  .stats .ship-stat:before { content: "🚀 "; }
-  .stats .ship-stat:after {
+  .status.cash {
+    color: yellowgreen;
+    width: 20%;
+  }
+  .status.cash:before {
+    content: "💰 ";
+  }
+  .status.ship {
+    color: rgb(255, 106, 53);
+    width: 17.5%;
+  }
+  .status.ship:before {
+    content: "🚀 ";
+  }
+  .status.ship:after {
     content: "%";
     font-size: 16px;
   }
-  .stats .mood-stat { top: 0; width: 10%; }
-  .stats .crew-stat:before { content: "💁 "; }
-  .stats .hold-stat:before { content: "📦 "; }
-  .stats .time-stat:before { content: "📅 "; }
-  .stats > * {
-    bottom: 4px;
-    color: lightskyblue;
-    padding: 6px;
-    position: relative;
+  .status.mood {
     text-align: center;
-    width: 18%;
+    width: 25%;
   }
-  .stats > *:before {
-    position: relative;
-    top: 4px;
+  .status.here {
+    flex-grow: 2;
+    font-size: 20px;
+    text-align: right;
   }
-  /* lists */
+  .status.here.port:before {
+    content: "📍";
+  }
+  .status.here.space:before {
+    content: "➡️ ";
+  }
+  .status.time {
+    color: burlywood;
+    flex-grow: 1;
+    min-width: 15%;
+    text-align: right;
+  }
+  .status.time:before {
+    content: "📅 ";
+  }
+
+  /* LISTS (crew + cargo) */
+
   .lists {
     display: flex;
   }
@@ -197,49 +225,51 @@
     position: relative;
     top: 1px;
   }
-  /* galaxy map */
-  .galaxy-map {
+
+  /* STARMAP */
+
+  .starmap {
     background: #333;
     margin-bottom: 20px;
   }
-  .galaxy-map line {
+  .starmap line {
     stroke: #555;
     stroke-width: 1;
   }
-  .galaxy-map circle {
+  .starmap circle {
     cursor: pointer;
   }
-  .galaxy-map text {
+  .starmap text {
     cursor: pointer;
     fill: #eee;
   }
-  .galaxy-map .depart-button.disabled {
+  .starmap .depart-button.disabled {
     cursor: not-allowed;
     opacity: 0.5;
   }
-  /* galaxy map target indicators */
-  .galaxy-map .target circle {
+  /* starmap target indicators */
+  .starmap .target circle {
     stroke: cyan;
     stroke-dasharray: 1,1;
     stroke-width: 2;
   }
-  .galaxy-map .target text {
+  .starmap .target text {
     fill: cyan;
   }
-  .galaxy-map line.target {
+  .starmap line.target {
     stroke: cyan;
     stroke-dasharray: 1,1;
   }
-  /* galaxy map current position indicators */
-  .galaxy-map .here circle {
+  /* starmap current position indicators */
+  .starmap .here circle {
     stroke: lime;
     stroke-dasharray: 1,1;
     stroke-width: 2;
   }
-  .galaxy-map .here text {
+  .starmap .here text {
     fill: lime;
   }
-  .galaxy-map line.here {
+  .starmap line.here {
     animation: 100s linear infinite travel-indicator;
     stroke: lime;
     stroke-dasharray: 1,1;
@@ -249,7 +279,9 @@
     from { stroke-dashoffset: 100%; }
     to { stroke-dashoffset: 0%; }
   }
-  /* infobox */
+
+  /* INFOBOX */
+
   .info-box {
     background: #333;
     padding: 1rem;
