@@ -13,6 +13,9 @@
       (= (count items) 2) [(first items) " and " (second items)]
       :else (into (vec (interpose ", " (butlast items))) [", and " (last items)]))))
 
+(defn culture-link [thing]
+  [:link [:cultures (:culture thing)]])
+
 (defn dest-link [thing]
   [:link [:places (:destination thing)]])
 
@@ -144,7 +147,7 @@
 
 (defmethod describe :char [char]
   [[(subj char) " is a person from " (home-link char) ". "
-    "They belong to the " (:culture char) " culture. "
+    "They belong to the " (culture-link char) " culture. "
     (case (:role char)
       :crew
         "They are a member of our crew."
@@ -155,13 +158,16 @@
       ;else
         "")]])
 
+(defmethod describe :culture [culture]
+  [[(subj culture) " is a distinct culture in this region of the galaxy."]])
+
 (defmethod describe :place [place]
   (binding [rand/*rng* (rand/rng (hash (:name place)))] ; ensure we pick the same text variations every time
     (let [are #(rand-nth ["are " "include "])]
       [[(subj place) " is an inhabited "
         (rand-nth ["planetary " "solar " "star " ""]) "system. "
         "The " (rand-nth ["dominant" "majority"]) " culture is "
-        (:name (:language place)) ". "
+        (culture-link place) ". "
         (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
         "xports " (are) (comma-list (map name (:exports place))) ". "
         (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])

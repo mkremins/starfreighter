@@ -164,12 +164,12 @@
                 {:class (cond here? "here" target? "target")
                  :x1 (:x p1) :y1 (:y p1) :x2 (:x p2) :y2 (:y p2)}))))
         ;; draw places
-        (let [lang-names  (distinct (map (comp :name :language) (vals places)))
-              lang-colors (zipmap lang-names map-colors)
-              job-dests   (set (map :destination (:cargo data)))]
+        (let [culture-ids    (distinct (map :culture (vals places)))
+              culture-colors (zipmap culture-ids map-colors)
+              job-dests      (set (map :destination (:cargo data)))]
           (dom/g {:class "places"}
             (for [{:keys [x y name] :as place} (vals places)
-                  :let [color   (get lang-colors (:name (:language place)))
+                  :let [color   (get culture-colors (:culture place))
                         dest?   (and (not docked?) (= name destination))
                         here?   (or (= name location) dest?)
                         job?    (contains? job-dests name)

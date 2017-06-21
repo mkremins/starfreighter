@@ -139,14 +139,15 @@
 ;;; start-of-game setup
 
 (defn create-init-state []
-  (let [places (gen/gen-places)
+  (let [{:keys [cultures places]} (gen/gen-map)
         chars  (mapcat :merchants places)
         places (map #(update % :merchants (partial map :id)) places)
         place  (rand/rand-nth places)
-        crew   (repeatedly 2 #(gen/gen-character place :crew))
+        crew   (repeatedly 2 #(gen/gen-character {:cultures cultures} place :crew))
         chars  (into chars crew)]
     {;; universe
      :chars     (util/indexed-by :id chars)
+     :cultures  cultures
      :places    (util/indexed-by :name places)
      ;; your stuff
      :cargo     []

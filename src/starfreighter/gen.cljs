@@ -73,11 +73,12 @@
       (disj nil)))
 
 (defn gen-character
-  ([place]
-    (let [lang (:language place)
-          [fname lname] (map str/capitalize (rand/unique-runs 2 lang/gen-word lang))
-          nick (gen-nickname fname lname)
-          nick-only? (and nick (rand/chance 1 4))]
+  ([state place]
+    (let [culture       (get-in state [:cultures (:culture place)])
+          language      (:language culture)
+          [fname lname] (map str/capitalize (rand/unique-runs 2 lang/gen-word language))
+          nick          (gen-nickname fname lname)
+          nick-only?    (and nick (rand/chance 1 4))]
       {:id (gen-id)
        :type :char
        :name
@@ -87,13 +88,14 @@
        :shortname (or nick fname)
        :traits    (gen-traits)
        :home      (:name place)
-       :culture   (:name lang)
+       :culture   (:id culture)
        :memories  []}))
-  ([place role]
-    (assoc (gen-character place) :role role)))
+  ([state place role]
+    (assoc (gen-character state place) :role role)))
 
-(def gen-local-character
-  (comp gen-character db/current-place))
+(defn gen-local-character
+  ([state] (gen-character state (db/current-place state)))
+  ([state role] (gen-character state (db/current-place state) role)))
 
 ;;; jobs & cargo
 
@@ -174,6 +176,18 @@
                (db/untrustworthy? seller) {true 4 false 1}
                :else {true 1 false 2}))})))
 
+;;; cultures
+
+(defn gen-culture []
+  (let [language (lang/gen-language)]
+    {:id (gen-id)
+     :type :culture
+     :name (:name language)
+     :language language}))
+
+(defn gen-cultures []
+  (util/indexed-by :id (repeatedly (rand/rand-int* 5 6) gen-culture)))
+
 ;;; places
 
 (def goods
@@ -213,16 +227,17 @@
    {:template :weapons
     :exports ["explosives" "weapons"]}])
 
-(defn gen-place [lang]
+(defn gen-place [culture]
   (let [modules   (rand/pick-n 3 modules)
         exports   (rand/pick-n 3 goods)
         place     {:type :place
-                   :name (str/capitalize (lang/gen-word lang))
+                   :name (str/capitalize (lang/gen-word (:language culture)))
                    :modules modules
                    :exports exports
                    :imports (set (rand/pick-n 2 (remove (set exports) goods)))
-                   :language lang}
-        merchants (repeatedly (rand-nth [3 3 4]) #(gen-character place :merchant))]
+                   :culture (:id culture)}
+        merchants (repeatedly (rand-nth [2 3 3])
+                    #(gen-character {:cultures {(:id culture) culture}} place :merchant))]
     (assoc place :merchants merchants)))
 
 (defn- point-is-ok? [points {:keys [x y] :as point}]
@@ -264,7 +279,6 @@
 (defn- make-extra-connections [points]
   (let [pairs (->> (comb/combinations (vals points) 2)
                    (sort-by #(geom/distance (first %) (second %)))
-                   ;(take-while #(< (geom/distance (first %) (second %)) 75))
                    (filter #(should-connect? (first %) (second %))))]
     (reduce (fn [points [{id1 :id} {id2 :id}]]
               (-> points (update-in [id1 :connections] conj id2)
@@ -273,12 +287,12 @@
 
 (defn- spread-cultures [points]
   (loop [points points]
-    (let [groups        (group-by (comp :language points) (keys points)) ; map culture => list of claimed IDs
+    (let [groups        (group-by (comp :culture points) (keys points)) ; map culture ID => list of claimed IDs
           unclaimed-ids (set (get groups nil))]
       (if (empty? unclaimed-ids)
         points ; nowhere to expand to, so we must be done
         (let [groups (dissoc groups nil)
-              group-frontiers ; map culture => "frontier" (set of unclaimed neighbor IDs)
+              group-frontiers ; map culture ID => "frontier" (set of unclaimed neighbor IDs)
               (->> (vals groups)
                    (map #(mapcat (comp :connections points) %))
                    (map #(set/intersection (set %) unclaimed-ids))
@@ -290,34 +304,37 @@
                    (first))
               _ (assert (pos? (count frontier))) ; if we got this far, we must have somewhere to expand to
               expand-to-id (rand/rand-nth (vec frontier))]
-          (recur (assoc-in points [expand-to-id :language] group-to-expand)))))))
+          (recur (assoc-in points [expand-to-id :culture] group-to-expand)))))))
 
-(defn- points->places [points]
+(defn- points->places [points cultures]
   (loop [points points
          places []
          names  #{}]
     (if-let [point (first points)]
       ;; need to make sure the name isn't already taken by an earlier generated place
-      (let [place (rand/restrict #(not (contains? names (:name %))) gen-place (:language point))]
+      (let [culture (get cultures (:culture point))
+            place   (rand/restrict #(not (contains? names (:name %))) gen-place culture)]
         (recur (rest points) (conj places (merge point place)) (conj names (:name place))))
       places)))
 
-(defn gen-places []
+(defn gen-map []
   (let [;; 1. generate 5-6 distinct cultures
-        cultures (repeatedly (rand/rand-int* 5 6) lang/gen-language)
+        cultures (gen-cultures)
         ;; 2. starting at the center of the map, build a network of points
         points   (place-points)
         ;; 3. make some random connections between nearby points
         points   (make-extra-connections points)
         ;; 4. "claim" one random point as the "hub" for each culture
-        points   (reduce (fn [points [id culture]]
-                           (update points id assoc :hub? true :language culture))
+        points   (reduce (fn [points [id culture-id]]
+                           (update points id assoc :hub? true :culture culture-id))
                          points
-                         (zipmap (rand/shuffle (keys points)) cultures))
+                         (zipmap (rand/shuffle (keys points)) (keys cultures)))
         ;; 5. iteratively spread cultures to unclaimed adjacent points until all points are claimed
         points   (spread-cultures points)
         ;; 6. transform all points into "places" (i.e. generate a name, merchants, etc)
-        places   (util/indexed-by :id (points->places (vals points)))]
-    ;; 7. use names, not IDs, as keys for connections
-    ;; (TODO switch to using IDs as the primary keys for places throughout the game?)
-    (map #(update % :connections (partial mapv (comp :name places))) (vals places))))
+        places   (util/indexed-by :id (points->places (vals points) cultures))
+        ;; 7. use names, not IDs, as keys for connections
+        ;; (TODO switch to using IDs as the primary keys for places throughout the game?)
+        places   (map #(update % :connections (partial mapv (comp :name places))) (vals places))]
+    {:cultures cultures
+     :places   places}))
