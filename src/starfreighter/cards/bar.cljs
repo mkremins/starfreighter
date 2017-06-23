@@ -46,7 +46,7 @@
  :weight (constantly 1)
  :gen (fn [state]
         {:type :game-over
-         :text ["You die tragically in a bar fight on " (:location state) "."]
+         :text ["You die tragically in a bar fight on " (:name (db/current-place state)) "."]
          :deadly? true})}
 
 {:id :hit-with-object

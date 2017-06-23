@@ -33,12 +33,6 @@
 (defn char? [thing]
   (= (:type thing) :char))
 
-(defcurried headed-to? [thing loc]
-  (= (:destination thing) loc))
-
-(defn headed-here? [state]
-  (headed-to? (:location state)))
-
 
 ;;; stats
 
@@ -59,13 +53,6 @@
   (update state :ship #(util/clamp (- % amount) 0 100)))
 
 
-(defcurried has-at-least? [state stat amount]
-  (>= (get state stat) amount))
-
-(defcurried has-at-most? [state stat amount]
-  (<= (get state stat) amount))
-
-
 ;;; characters
 
 (defcurried remember-char [state char]
@@ -80,6 +67,9 @@
 (defcurried update-char [state char f]
   ;; would love to add `& args` at the end, but can't have multiple variadic clauses :(
   (update-in state [:chars (:id char)] f))
+
+(defcurried from? [char place]
+  (= (:home char) (:name place)))
 
 (defcurried has-trait? [char trait]
   (contains? (:traits char) trait))
@@ -201,17 +191,42 @@
 
 ;;; places, the map
 
-(defn current-place [state]
-  (get (:places state) (:location state)))
+(defcurried ^:private travel-stage=? [state stage]
+  (= (:stage (:travel state)) stage))
 
-(defn adjacencies [state loc]
-  (:connections (cond->> loc (string? loc) (get (:places state)))))
+(def in-port?    (travel-stage=? :in-port))
+(def departing?  (travel-stage=? :departing))
+(def in-transit? (travel-stage=? :in-transit))
+(def arriving?   (travel-stage=? :arriving))
+
+(defn current-place [{:keys [travel] :as state}]
+  (when-let [place-name (case (:stage travel)
+                          (:arriving :in-port) (:at travel)
+                          :departing (:from travel)
+                          :in-transit nil)]
+    (get (:places state) place-name)))
+
+(defn current-dest [{:keys [travel] :as state}]
+  (when-let [dest-name (case (:stage travel)
+                         :arriving (:at travel)
+                         (:departing :in-transit) (:to travel)
+                         :in-port nil)]
+    (get (:places state) dest-name)))
+
+(defn ->place [state place]
+  (cond->> place (string? place) (get (:places state))))
+
+(defn adjacencies [state place]
+  (:connections (->place state place)))
 
 (defn pathfind
-  ([state to] (pathfind state (:location state) to))
+  ([state to]
+    (pathfind state (or (current-place state) (:from (:travel state))) to))
   ([state from to]
-    (let [from (cond-> from (map? from) (:name from))
-          to   (cond-> to (map? to) (:name to))]
+    (assert (or (string? from) (and (map? from) (= (:type from) :place))))
+    (assert (or (string? to)   (and (map? to)   (= (:type to)   :place))))
+    (let [from (cond-> from (map? from) :name)
+          to   (cond-> to   (map? to)   :name)]
       (if (= from to)
         [from]
         (loop [paths [[from]]
@@ -222,10 +237,12 @@
                 (recur paths' (into visited (map peek paths'))))))))))
 
 (defn rand-destination [state]
-  (rand-nth
-    (conj (:connections (current-place state))
-          (rand-nth (remove #{(:location state)} (keys (:places state)))))))
+  (let [place (current-place state)]
+    (rand-nth
+      (conj (:connections place)
+            (rand-nth (remove #{(:name place)} (keys (:places state))))))))
 
+;; TODO: should this pay attention to [:travel :final-dest] if we have one saved?
 (defn where-to-next [state]
   (let [place (current-place state)
         cargo-dests (filter identity (map :destination (:cargo state)))]
@@ -234,26 +251,70 @@
       (->> (map (partial pathfind state) cargo-dests)
            (sort-by count <)
            (first)
-           (second)))))
+           (last)))))
 
-(defcurried depart-for [state dest]
-  (let [first-hop (second (pathfind state dest))]
-    (assoc state
-      :docked? false
-      :destination first-hop
-      :recent-picks #{})))
 
-(defn arrive [state]
+;;; travel state transitions
+
+;; :in-port => :departing (when we're ready to leave port)
+(defcurried begin-departure-for [state dest]
+  (assert (in-port? state))
   (assoc state
-    :docked? true
-    :location (:destination state)
+    :travel {:stage :departing
+             :from (:name (current-place state))
+             :to (second (pathfind state dest))
+             :final-dest dest}
     :recent-picks #{}))
 
-(defcurried from? [char place]
-  (= (:home char) (:name place)))
+;; :departing => :in-port (when something prevents us from leaving the system)
+;;
+;; TODO: not sure what should happen here – going back to normal in-port deck doesn't make sense really.
+;; maybe any card that uses this effect will have to decide for itself by setting :deck/:next-card?
+(defn abort-departure [state]
+  (assert (departing? state))
+  (assoc state
+    :travel {:stage :in-port :at (:from (:travel state))}
+    :recent-picks #{}))
 
-(defcurried import? [item place]
-  (contains? (:imports place) (cond-> item (map? item) :name)))
+;; :departing => :in-transit (when we successfully leave the system)
+(defn depart [state]
+  (assert (departing? state))
+  (-> state
+      (assoc-in [:travel :stage] :in-transit)
+      (assoc :recent-picks #{})))
+
+;; :in-transit => :arriving (when we arrive at the edge of the destination system)
+(defn begin-arrival [state]
+  (assert (in-transit? state))
+  (-> state
+      ;; Q: why not just `(assoc :travel ...)` here?
+      ;; A: bc we want to preserve [:travel :final-dest] if we have one.
+      (update :travel assoc :stage :arriving :at (:to (:travel state)))
+      (update :travel dissoc :from :to)
+      (assoc :recent-picks #{})))
+
+;; :arriving => :in-transit
+;;
+;; when we decide, after arriving at the edge of a system but before getting into port,
+;; to "bounce" onward to the next system (en route to [:travel :final-dest]) instead of
+;; docking and starting a new in-port "episode" like we normally would.
+(defn bounce [{:keys [travel] :as state}]
+  (assert (and (arriving? state)
+               (:final-dest travel)
+               (not= (:at travel) (:final-dest travel))))
+  (-> state
+      (update :travel assoc
+        :stage :in-transit
+        :from (:at travel)
+        :to (second (pathfind state (:final-dest travel))))
+      (assoc :recent-picks #{})))
+
+;; :arriving => :in-port (when we actually get into port in the destination system)
+(defn arrive [state]
+  (assert (arriving? state))
+  (-> state
+      (assoc-in [:travel :stage] :in-port)
+      (assoc :recent-picks #{})))
 
 
 ;;; cargo, passengers
@@ -274,6 +335,15 @@
 
 (defn passengers [state]
   (filter char? (:cargo state)))
+
+(defcurried import? [item place]
+  (contains? (:imports place) (cond-> item (map? item) :name)))
+
+(defcurried headed-to? [thing loc]
+  (= (:destination thing) loc))
+
+(defn headed-here? [state]
+  (headed-to? (:name (current-place state))))
 
 (defn cargo-to-drop [state]
   (->> state :cargo (remove char?) (filter (headed-here? state))))
@@ -354,7 +424,10 @@
    :update-all-crew       update-all-crew ;; TODO will need to be custom (using char effects)
    :add-whole-crew-memory add-whole-crew-memory
    ;; travel
-   :depart-for            depart-for
+   :begin-departure-for   begin-departure-for
+   :depart                depart
+   :begin-arrival         begin-arrival
+   :bounce                bounce
    :arrive                arrive
    ;; cargo
    :add-cargo             add-cargo

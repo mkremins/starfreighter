@@ -29,7 +29,7 @@
          :ok [[:damage-ship 10]]})}
 
 {:id :info-ship-repaired
- :prereq (db/has-at-most? :ship 99)
+ :prereq #(< (:ship %) 100)
  :bind   {:mechanic (db/some-where db/mechanic? db/crew)}
  :weight #(util/bucket (:ship %) [[20 2] [40 4] [60 2] [100 1]])
  :gen (fn [state]
@@ -44,7 +44,7 @@
          :ok [[:repair-ship 5]]})}
 
 {:id :request-try-fix-engine
- :prereq (db/has-at-most? :ship 60)
+ :prereq #(<= (:ship %) 60)
  :bind   {:mechanic (db/some-where db/mechanic? db/crew)}
  :weight #(if (<= (:ship %) 20) 2 1)
  :gen (fn [{{:keys [mechanic]} :bound :as state}]
@@ -78,11 +78,12 @@
  :prereq (complement (db/can-afford? 500))
  :weight (constantly 8)
  :gen (fn [state]
-        (let [complainer (db/some* state db/crew)]
+        (let [complainer (db/some* state db/crew)
+              dest (:name (db/current-dest state))]
           {:type :yes-no
            :speaker complainer
            :text ["I am starving! I know money’s tight and all, Cap’n, but can you please "
-                  "promise me we’ll at least earn enough at " (:destination state)
+                  "promise me we’ll at least earn enough at " dest
                   " to stock up on food before we leave port again?"]
            :yes [[:add-memory complainer :ran-out-of-cash]
                  [:add-memory complainer :was-reassured-about-cash]]
@@ -154,32 +155,33 @@
  :prereq #(> (count (db/passengers %)) (count (:crew %)))
  :bind   {:complainer (db/some* db/crew)}
  :weight #(js/Math.pow 2 (- (count (db/passengers %)) (count (:crew %))))
- :gen (fn [{{:keys [complainer]} :bound, dest :destination :as state}]
-        {:type :info
-         :speaker complainer
-         :text ["There are too many passengers on board this boat! "
-                ;; TODO variants replacing "they"/"them" with a specific passenger name?
-                (rand-nth [["I can’t get any"
-                            (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                            (rand-nth ["" " with them around"])
-                            " – they keep"]
-                           ["It’s impossible to get any"
-                            (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                            " with them"
-                            (rand-nth ["" " always" " constantly"])]
-                           "They keep"
-                           ["They’re " (rand-nth ["always" "constantly"])]])
-                (rand-nth [" acting like tourists and"
-                           " eating all the food and"
-                           " hogging the bathroom and"
-                           " stumbling around the corridors and"
-                           ""])
-                " getting underfoot. "
-                (rand-nth [""
-                           ["Can’t wait until we can let them off at " dest "."]
-                           "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
-                           ["I’ll be so glad to see them go when we get to " dest "."]])]
-         :ok [[:add-memory complainer :was-annoyed-by-passenger]]})}
+ :gen (fn [{{:keys [complainer]} :bound :as state}]
+        (let [dest (:name (db/current-dest state))]
+          {:type :info
+           :speaker complainer
+           :text ["There are too many passengers on board this boat! "
+                  ;; TODO variants replacing "they"/"them" with a specific passenger name?
+                  (rand-nth [["I can’t get any"
+                              (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                              (rand-nth ["" " with them around"])
+                              " – they keep"]
+                             ["It’s impossible to get any"
+                              (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
+                              " with them"
+                              (rand-nth ["" " always" " constantly"])]
+                             "They keep"
+                             ["They’re " (rand-nth ["always" "constantly"])]])
+                  (rand-nth [" acting like tourists and"
+                             " eating all the food and"
+                             " hogging the bathroom and"
+                             " stumbling around the corridors and"
+                             ""])
+                  " getting underfoot. "
+                  (rand-nth [""
+                             ["Can’t wait until we can let them off at " dest "."]
+                             "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
+                             ["I’ll be so glad to see them go when we get to " dest "."]])]
+           :ok [[:add-memory complainer :was-annoyed-by-passenger]]}))}
 
 ;;; passenger antics
 
@@ -228,6 +230,6 @@
          :text [(rand-nth ["Looks like we made it"
                            "Looks like we made it in one piece"
                            "Made it in one piece"])
-                ", Cap’n! Now approaching " (:destination state) "."]
-         :ok [[:arrive]]})}
+                ", Cap’n! Now approaching " (:name (db/current-dest state)) "."]
+         :ok [[:begin-arrival]]})}
 ])

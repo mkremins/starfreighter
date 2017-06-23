@@ -100,9 +100,10 @@
 ;;; jobs & cargo
 
 (defn distance-tiers [state]
-  (let [first-tier (vec (:connections (db/current-place state)))]
+  (let [place (db/current-place state)
+        first-tier (vec (:connections place))]
     (loop [tiers [first-tier]
-           visited (conj (set first-tier) (:location state))]
+           visited (conj (set first-tier) (:name place))]
       (let [this-tier
             (->> (last tiers)
                  (mapcat (comp :connections (:places state)))

@@ -186,7 +186,7 @@
 ;;; special offers from merchants
 
 {:id :offer-repair-ship
- :prereq (every-pred (db/has-at-most? :ship 70) (db/can-afford? repair-price))
+ :prereq (every-pred #(<= (:ship %) 70) (db/can-afford? repair-price))
  :bind   {:merchant db/some-trusting-merchant}
  :weight #(util/bucket (:ship %) [[20 16] [40 6] [100 4]])
  :gen (fn [{{:keys [merchant]} :bound :as state}]
@@ -284,11 +284,11 @@
                   " "
                   (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
                   " we "
-                  (rand-nth ["get a move on" "get going" "hit the road"
-                             ["set out for " [:link [:places proposed-dest]]]
-                             ["shove off for " [:link [:places proposed-dest]]]])
+                  (rand-nth ["get a move on" "get going" "hit the road" "push off"
+                             "raise anchor" "set out" "set sail" "shove off"])
+                  " for " [:link [:places proposed-dest]]
                   (rand-nth ["" " already"]) "?"]
-           :yes [[:depart-for proposed-dest]]
+           :yes [[:begin-departure-for proposed-dest]]
            :no [[:add-memory speaker :declined-depart-request]]}))}
 
 {:id :request-resign
@@ -320,7 +320,7 @@
                    "that would be enough to convince me to stay."]))]
           {:type :yes-no
            :speaker quitter
-           :text ["Sorry, Cap’n, but I think " (rand-nth ["this" (:location state)])
+           :text ["Sorry, Cap’n, but I think " (rand-nth ["this" (:name (db/current-place state))])
                   " might just be the end of the line for me. I’d like to request "
                   "your permission to resign."]
            :yes on-resign

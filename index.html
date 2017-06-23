@@ -145,11 +145,17 @@
     font-size: 20px;
     text-align: right;
   }
-  .status.here.port:before {
+  .status.here.in-port:before {
     content: "📍";
   }
-  .status.here.space:before {
+  .status.here.departing:before {
+    content: "↗️ ";
+  }
+  .status.here.in-transit:before {
     content: "➡️ ";
+  }
+  .status.here.arriving:before {
+    content: "↘️ ";
   }
   .status.time {
     color: burlywood;
@@ -261,15 +267,15 @@
     stroke-dasharray: 1,1;
   }
   /* starmap current position indicators */
-  .starmap .here circle {
+  .starmap .travel circle {
     stroke: lime;
     stroke-dasharray: 1,1;
     stroke-width: 2;
   }
-  .starmap .here text {
+  .starmap .travel text {
     fill: lime;
   }
-  .starmap line.here {
+  .starmap line.travel {
     animation: 100s linear infinite travel-indicator;
     stroke: lime;
     stroke-dasharray: 1,1;

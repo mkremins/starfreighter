@@ -78,9 +78,11 @@
       (dom/span {:class "status cash"} (:cash data))
       (dom/span {:class "status ship"} (:ship data))
       (dom/span {:class "status mood"} (mood->icon (db/avg-crew-mood data)))
-      (dom/span {:class (str "status here " (if (:docked? data) "port" "space"))}
+      (dom/span {:class (str "status here " (name (:stage (:travel data))))}
         (om/build info-link
-          [:places (if (:docked? data) (:location data) (:destination data))]))
+          (if (db/in-transit? data)
+            (db/current-dest data)
+            (db/current-place data))))
       (dom/span {:class "status time"} (:turn data)))))
 
 (defcomponent slot-details [data owner]
@@ -137,7 +139,9 @@
 
 (defcomponent starmap [data owner]
   (render [_]
-    (let [{:keys [destination docked? info-target location places]} data
+    (let [{:keys [info-target places]} data
+          location     (:name (db/current-place data))
+          destination  (:name (db/current-dest data))
           target-place (when (= (:type info-target) :place) info-target)
           set-target!  (fn [target]
                          #(do (.stopPropagation %)
@@ -149,19 +153,19 @@
          :viewBox (str "0 0 " map-size " " map-size)}
         ;; draw connections
         (let [target-path (some->> target-place (db/pathfind data) set)
-              travel-ends [location destination]
+              travel-ends [(or location (:from (:travel data))) destination]
               connections (->> (vals places)
                                (mapcat (fn [{:keys [name connections]}]
                                          (map #(-> [name %]) connections)))
                                (util/distinct-by set))]
           (dom/g {:class "connections"}
             (for [[end1 end2 :as conn-ends] connections
-                  :let [here?   (and (not docked?) (= (set conn-ends) (set travel-ends)))
+                  :let [here?   (= (set conn-ends) (set travel-ends))
                         ends    (if here? travel-ends conn-ends)
                         target? (every? (partial contains? target-path) ends)
                         [p1 p2] (map places ends)]]
               (dom/line
-                {:class (cond here? "here" target? "target")
+                {:class (cond here? "travel" target? "target")
                  :x1 (:x p1) :y1 (:y p1) :x2 (:x p2) :y2 (:y p2)}))))
         ;; draw places
         (let [culture-ids    (distinct (map :culture (vals places)))
@@ -170,12 +174,14 @@
           (dom/g {:class "places"}
             (for [{:keys [x y name] :as place} (vals places)
                   :let [color   (get culture-colors (:culture place))
-                        dest?   (and (not docked?) (= name destination))
-                        here?   (or (= name location) dest?)
+                        dest?   (= name destination)
+                        here?   (= name location)
+                        travel? (or dest? here?
+                                    (#{(:from (:travel data)) (:to (:travel data))} name))
                         job?    (contains? job-dests name)
                         target? (= name (:name target-place))
                         radius  (if (:hub? place) 16 10)]]
-              (dom/g {:class (cond-> "map-location" here? (str " here") target? (str " target"))}
+              (dom/g {:class (cond-> "map-location" travel? (str " travel") target? (str " target"))}
                 (dom/circle
                   {:cx x :cy y :r radius :fill color
                    :on-click (set-target! place)})
@@ -183,11 +189,11 @@
                   {:x x :y (- y (+ radius 4))
                    :text-anchor "middle" :font-size 12
                    :on-click (set-target! place)}
-                  (dom/tspan (cond (and here? docked?) "📍" dest? "➡️ " job? "🚩"))
+                  (dom/tspan (cond here? "📍" dest? "➡️ " job? "🚩"))
                   (dom/tspan name))))))
         ;; draw button to depart for target (if any)
         (when (some-> target-place :name (not= location))
-          (let [enabled? (and docked? (game/interruptible? (:card data)))]
+          (let [enabled? (and (db/in-port? data) (game/interruptible? (:card data)))]
             (dom/text {:class (cond-> "depart-button" (not enabled?) (str " disabled"))
                        :x 468 :y 462 :text-anchor "end" :font-size 18
                        :on-click (if enabled?
@@ -199,8 +205,8 @@
 (defcomponent info-box [data owner]
   (render [_]
     (when-let [target (or (:info-target data)
-                          (and (:docked? data) (db/current-place data))
-                          (get-in data [:places (:destination data)]))]
+                          (db/current-place data)
+                          (db/current-dest data))]
       (dom/div {:class "info-box"}
         (for [paragraph (desc/describe target)]
           (dom/p (om/build-all content-span paragraph)))))))

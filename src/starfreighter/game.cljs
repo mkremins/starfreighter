@@ -1,6 +1,8 @@
 (ns starfreighter.game
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
-  (:require [starfreighter.cards.bar :as bar]
+  (:require [starfreighter.cards.arrival :as arrival]
+            [starfreighter.cards.bar :as bar]
+            [starfreighter.cards.departure :as departure]
             [starfreighter.cards.gambling :as gambling]
             [starfreighter.cards.loans :as loans]
             [starfreighter.cards.port :as port]
@@ -9,15 +11,6 @@
             [starfreighter.gen :as gen]
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
-
-(let [port-cards
-      (for [card (concat port/cards bar/cards gambling/cards loans/cards)]
-        (update card :prereq #(or (some-> % (every-pred :docked?)) :docked?)))
-      space-cards
-      (for [card space/cards]
-        (update card :prereq #(or (some-> % (every-pred (complement :docked?))) (complement :docked?))))]
-  (def all-cards
-    (into (vec port-cards) space-cards)))
 
 (defn interruptible?
   "Returns whether a given `card` is interruptible – i.e. whether it's OK (both
@@ -54,20 +47,20 @@
         (util/error "Invalid card type " (:type card)))))
 
 (defn prepare-to-depart [state]
-  (let [dest (:info-target state)]
+  (let [dest (:name (:info-target state))]
     (assoc state :card
       (compile-choices state
         {:id :prepare-to-depart
          :type :yes-no
          :interruptible? false
          :speaker (db/some* state db/crew)
-         :text ["Oh, we’re leaving for " (:name dest) " already? Guess I’ll go fire up the engine!"]
-         :yes [[:depart-for dest]]
+         :text ["Oh, we’re leaving for " dest " already? Guess I’ll go fire up the engines!"]
+         :yes [[:begin-departure-for dest]]
          :no []}))))
 
 (defn applicable-game-over-if-any [state]
   (cond
-    (and (zero? (:ship state)) (not (:docked? state)))
+    (and (zero? (:ship state)) (not (db/in-port? state)))
       {:id :ship-falls-apart
        :type :game-over
        :deadly? true
@@ -95,6 +88,14 @@
          :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
          :ok (for [char passengers-to-drop] [:drop-cargo char])})))
 
+(let [port-cards (concat port/cards bar/cards gambling/cards loans/cards)]
+  (defn default-deck [state]
+    (condp #(%1 %2) state
+      db/in-port?    port-cards
+      db/departing?  departure/cards
+      db/in-transit? space/cards
+      db/arriving?   arrival/cards)))
+
 (defn try-pick [state metacard]
   (when (and (or (:repeatable? metacard)
                  (not (contains? (:recent-picks state) (:id metacard))))
@@ -111,7 +112,7 @@
   (or (applicable-game-over-if-any state)
       (applicable-arrival-if-any state)
       (:next-card state)
-      (let [deck     (or (:deck state) all-cards)
+      (let [deck     (or (:deck state) (default-deck state))
             pickable (filter identity (map (partial try-pick state) deck))
             _        (assert (not (empty? pickable)))
             picked   (rand/weighted-choice
@@ -157,8 +158,7 @@
      :cash      10000
      :ship      60
      ;; coordinates
-     :docked?   true
-     :location  (:name place)
+     :travel    {:stage :in-port :at (:name place)}
      :turn      1
      :recent-picks #{:offer-join-crew}} ; prevent init crew from "reminiscing" about a place they haven't left yet
      ))
