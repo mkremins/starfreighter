@@ -213,6 +213,9 @@
                          :in-port nil)]
     (get (:places state) dest-name)))
 
+(defcurried find-module [place template]
+  (first (filter #(= (:template %) template) (:modules place))))
+
 (defn ->place [state place]
   (cond->> place (string? place) (get (:places state))))
 

@@ -82,9 +82,10 @@
 (def cards [
 
 {:id :request-gambling
- :prereq (db/can-afford? base-bet-amount)
+ :prereq (every-pred (db/can-afford? base-bet-amount)
+                     (comp (db/find-module :gambling) db/current-place))
  :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
- :weight (constantly 1)
+ :weight (constantly 4)
  :gen (fn [{{:keys [speaker]} :bound :as state}]
         {:type :yes-no
          :speaker speaker
