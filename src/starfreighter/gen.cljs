@@ -196,7 +196,7 @@
    "fertilizer" "gold" "grain" "livestock" "medicine" "metamatter" "oxygen" "spice" "synthstim"
    "weapons" "water"])
 
-(def modules
+(def all-modules
   [{:template :agriculture
     :imports ["water" "fertilizer"]
     :exports ["grain" "livestock"]}
@@ -228,14 +228,36 @@
    {:template :weapons
     :exports ["explosives" "weapons"]}])
 
+(defn gen-modules []
+  (loop [modules []]
+    (if (>= (count modules) 3)
+      modules
+      (let [excludes (apply set/union (set (map :template modules)) (map :excludes modules))
+            export?  (set (mapcat :exports modules))
+            import?  (set (mapcat :imports modules))
+            pickable (->> all-modules
+                          (remove #(contains? excludes (:template %)))
+                          (filter #(not-any? export? (:imports %)))
+                          (filter #(not-any? import? (:exports %))))]
+        (if (pos? (count pickable))
+          (recur (conj modules (rand/rand-nth pickable)))
+          modules)))))
+
 (defn gen-place [culture]
-  (let [modules   (rand/pick-n 3 modules)
-        exports   (rand/pick-n 3 goods)
+  (let [modules   (gen-modules)
+        exports   (vec (mapcat :exports modules))
+        imports   (set (mapcat :imports modules))
+        exports   (cond-> exports (< (count exports) 3)
+                    (into (rand/pick-n (- 3 (count exports))
+                            (remove (set (concat imports exports)) goods))))
+        imports   (cond-> imports (< (count imports) 3)
+                    (into (rand/pick-n (- 3 (count imports))
+                            (remove (set (concat imports exports)) goods))))
         place     {:type :place
                    :name (str/capitalize (lang/gen-word (:language culture)))
                    :modules modules
                    :exports exports
-                   :imports (set (rand/pick-n 2 (remove (set exports) goods)))
+                   :imports imports
                    :culture (:id culture)}
         merchants (repeatedly (rand-nth [2 3 3])
                     #(gen-character {:cultures {(:id culture) culture}} place :merchant))]
