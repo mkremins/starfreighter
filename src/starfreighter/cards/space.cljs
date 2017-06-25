@@ -1,6 +1,7 @@
 (ns starfreighter.cards.space
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
+            [starfreighter.desc :refer [o r]]
             [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
 
@@ -12,21 +13,19 @@
  :prereq (constantly true)
  :weight (constantly 8)
  :gen (fn [state]
-        {:type :info
-         :speaker (db/some-preferably state db/mechanic? db/crew)
-         :text [(rand-nth ["" "" "Ack! " "Ouch! "])
-                (rand-nth ["What in the blazes was that?!"
-                           "What in the name of Zark was that?!"
-                           "What just happened?!"
-                           "What was that?!"])
-                " "
-                (rand-nth ["Cap’n, I think" "Felt like" "I think" "Sounds like"])
-                " something big "
-                (rand-nth ["" "might’ve "])
-                "just "
-                (rand-nth ["bounced off" "crashed into" "hit"])
-                " the ship!"]
-         :ok [[:damage-ship 10]]})}
+        (let [damage (rand/rand-int* 5 10)]
+          {:type :info
+           :speaker (db/some-preferably state db/mechanic? db/crew)
+           :text (if (> damage 7)
+                   [(o (r "Ack! " "Ouch! "))
+                    (r "What in the blazes was that?!" "What just happened?!"
+                       "What the hell was that?!" "What was that?!")
+                    " " (r "Cap’n, I think" "Felt like" "I think" "Sounds like")
+                    " something big " (o "might’ve ") "just "
+                    (r "bounced off" "crashed into" "hit") " the " (r "hull" "ship") "!"]
+                   [(r "Ah, hell." "Blasted space junk.") " Something just "
+                    (r "bounced off" "crashed into" "hit") " the " (r "hull" "ship") "."])
+           :ok [[:damage-ship damage]]}))}
 
 {:id :info-ship-repaired
  :prereq #(< (:ship %) 100)
@@ -36,10 +35,9 @@
         {:type :info
          :speaker (-> state :bound :mechanic)
          :text ["I’ve managed to make a few tweaks that might get this "
-                (rand-nth ["hunk of junk" "rust bucket"])
-                " running a little smoother. Hopefully it’ll "
-                (rand-nth ["" "be enough to "])
-                (rand-nth ["keep us going" "keep us moving" "smooth things over" "tide us over"])
+                (r "hunk of junk" "rust bucket") " running a little smoother. "
+                "Hopefully it’ll " (o "be enough to ")
+                (r "keep us going" "keep us moving" "smooth things over" "tide us over")
                 " until we can get a proper repair done in port."]
          :ok [[:repair-ship 5]]})}
 
@@ -98,31 +96,13 @@
         {:type :info
          :speaker crew-1
          :text ["Y’know, Cap’n, " (:shortname crew-2) " and I don’t always "
-                (rand-nth ["agree on everything"
-                           "get along"
-                           "get along so well"
-                           "see eye-to-eye"])
+                (r "agree on everything" ["get along" (o " so well")] "see eye-to-eye")
                 ". But lately, I’ve really been enjoying "
-                (rand-nth ["having them around"
-                           "having them around the ship"
-                           "their company"])
-                ". "
-                (rand-nth [""
-                           [(rand-nth ["Certainly helps keep"
-                                       "Certainly keeps"
-                                       "Definitely helps keep"
-                                       "Definitely keeps"
-                                       "Helps keep"
-                                       "It certainly helps keep"
-                                       "It certainly keeps"
-                                       "It definitely helps keep"
-                                       "It definitely keeps"
-                                       "It keeps"
-                                       "Keeps"])
-                            " "
-                            (rand-nth ["me from getting bored!"
-                                       "me on my toes!"
-                                       "the boredom away!"])]])]
+                (r "having them around" "having them around the ship" "their company") ". "
+                (o [(o "It ")
+                    (o (r "certainly" "definitely")) " "
+                    (r "helps keep" "keeps") " "
+                    (r "me from getting bored" "me on my toes" "the boredom away") "!"])]
          :ok [[:add-memory crew-1 :got-along-with-crewmate]
               [:add-memory crew-2 :got-along-with-crewmate]]})}
 
@@ -135,8 +115,8 @@
         {:type :info
          :speaker annoyed
          :text ["I can’t stand it anymore. " (:shortname annoyer) " "
-                (rand-nth ["is driving me" "is going to drive me"]) " "
-                (rand-nth ["crazy" "insane" "mad" "nuts"]) "!"]
+                (r "is driving me" "is going to drive me") " "
+                (r "crazy" "insane" "mad" "nuts") "!"]
          :ok [[:add-memory annoyed :was-annoyed-by-crewmate]
               [:add-memory annoyer :annoyed-crewmate]]})}
 
@@ -147,7 +127,7 @@
  :gen (fn [{{:keys [complainer]} :bound}]
         {:type :info
          :speaker complainer
-         :text ["Kinda " (rand-nth ["lonely" "quiet"]) " around here, isn’t it, Cap’n? "
+         :text ["Kinda " (r "lonely" "quiet") " around here, isn’t it, Cap’n? "
                 "I’m starting to think maybe we should hire on another crew member just for the company."]
          :ok [[:add-memory complainer :felt-lonely]]})}
 
@@ -161,26 +141,19 @@
            :speaker complainer
            :text ["There are too many passengers on board this boat! "
                   ;; TODO variants replacing "they"/"them" with a specific passenger name?
-                  (rand-nth [["I can’t get any"
-                              (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                              (rand-nth ["" " with them around"])
-                              " – they keep"]
-                             ["It’s impossible to get any"
-                              (rand-nth [" shut-eye" " sleep" "thing done" " work done"])
-                              " with them"
-                              (rand-nth ["" " always" " constantly"])]
-                             "They keep"
-                             ["They’re " (rand-nth ["always" "constantly"])]])
-                  (rand-nth [" acting like tourists and"
-                             " eating all the food and"
-                             " hogging the bathroom and"
-                             " stumbling around the corridors and"
-                             ""])
-                  " getting underfoot. "
-                  (rand-nth [""
-                             ["Can’t wait until we can let them off at " dest "."]
-                             "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
-                             ["I’ll be so glad to see them go when we get to " dest "."]])]
+                  (r ["I can’t get any" (r " shut-eye" " sleep" "thing done" " work done")
+                      (o " with them around") " – they keep"]
+                     ["It’s impossible to get any" (r " shut-eye" " sleep" "thing done" " work done")
+                      " " (o "around here ") "with them" (r " always" " constantly" "")]
+                     "They keep"
+                     ["They’re " (r "always" "constantly")]) " "
+                  (r "acting like tourists and" "eating all the food and"
+                     "hogging the bathroom and" "stumbling around the corridors and" "")
+                  "getting underfoot. "
+                  (r ["Can’t wait until we can " (o "finally") " let them off at " dest "."]
+                     "Dammit, Cap’n, we’re a trading vessel, not a cruise ship!"
+                     ["I’ll be so glad to see them go when we get to " dest "."]
+                     "")]
            :ok [[:add-memory complainer :was-annoyed-by-passenger]]}))}
 
 ;;; passenger antics
@@ -195,7 +168,7 @@
            :text ["Excuse me, Captain. The passenger quarters are kind of uncomfortable, "
                   "and I haven’t been able to get a lot of sleep. Could I maybe move over "
                   "to the crew quarters for the rest of the voyage? I’d be willing to "
-                  (rand-nth ["compensate you" "pay you a little extra"]) " – " [:cash tip]
+                  (r "compensate you" "pay you a little extra") " – " [:cash tip]
                   ", say – for your trouble."]
            :yes [[:earn tip]
                  [:add-whole-crew-memory :was-inconvenienced-by-passenger]]
@@ -227,9 +200,9 @@
  :gen (fn [state]
         {:type :info
          :speaker (db/some* state db/crew)
-         :text [(rand-nth ["Looks like we made it"
-                           "Looks like we made it in one piece"
-                           "Made it in one piece"])
+         :text [(r "Looks like we made it"
+                   "Looks like we made it in one piece"
+                   "Made it in one piece")
                 ", Cap’n! Now approaching " (:name (db/current-dest state)) "."]
          :ok [[:begin-arrival]]})}
 ])

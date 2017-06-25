@@ -8,6 +8,7 @@
             [starfreighter.cards.port :as port]
             [starfreighter.cards.space :as space]
             [starfreighter.db :as db]
+            [starfreighter.desc :as desc]
             [starfreighter.gen :as gen]
             [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
@@ -70,23 +71,24 @@
       nil))
 
 (defn applicable-arrival-if-any [state]
-  (or ;; drop off (and cash in) cargo you're supposed to deliver
-      (when-let [cargo-to-drop (seq (db/cargo-to-drop state))]
-        {:id :drop-cargo
-         :type :info
-         :speaker (db/some* state db/crew)
-         :text "I’ll go drop off the goods we’re supposed to deliver."
-         :ok (flatten1 (for [item cargo-to-drop]
-                         [[:drop-cargo item]
-                          [:earn (:pay-after item)]
-                          [:add-memory (:merchant item) :completed-delivery]]))})
-      ;; drop off passengers you're supposed to deliver
-      (when-let [passengers-to-drop (seq (db/passengers-to-drop state))]
-        {:id :drop-passengers
-         :type :info
-         :speaker (rand/rand-nth passengers-to-drop)
-         :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
-         :ok (for [char passengers-to-drop] [:drop-cargo char])})))
+  (when (db/in-port? state)
+    (or ;; drop off (and cash in) cargo you're supposed to deliver
+        (when-let [cargo-to-drop (seq (db/cargo-to-drop state))]
+          {:id :drop-cargo
+           :type :info
+           :speaker (db/some* state db/crew)
+           :text "I’ll go drop off the goods we’re supposed to deliver."
+           :ok (flatten1 (for [item cargo-to-drop]
+                           [[:drop-cargo item]
+                            [:earn (:pay-after item)]
+                            [:add-memory (:merchant item) :completed-delivery]]))})
+        ;; drop off passengers you're supposed to deliver
+        (when-let [passengers-to-drop (seq (db/passengers-to-drop state))]
+          {:id :drop-passengers
+           :type :info
+           :speaker (rand/rand-nth passengers-to-drop)
+           :text "Thanks for the ride, Captain! It’ll be good to get a fresh start here."
+           :ok (for [char passengers-to-drop] [:drop-cargo char])}))))
 
 (let [port-cards (concat port/cards bar/cards gambling/cards loans/cards)]
   (defn default-deck [state]
@@ -126,7 +128,8 @@
           :id (:id picked)))))
 
 (defn draw-next-card [state]
-  (compile-choices state (draw-next-card* state)))
+  (-> (compile-choices state (draw-next-card* state))
+      (update :text desc/normalize)))
 
 (defn handle-choice [state effects]
   (let [state' (db/process-effects state effects)

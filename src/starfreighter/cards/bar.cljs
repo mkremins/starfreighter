@@ -84,7 +84,8 @@
 (def cards [
 
 {:id :request-drinking
- :prereq (db/can-afford? 50)
+ :prereq (every-pred (db/can-afford? 50)
+                     (comp not (db/find-module :prohibition) db/current-place))
  :bind   {:speaker (db/some-where (db/mood-at-least? 20) db/crew)}
  :weight (constantly 1)
  :gen (fn [{{:keys [speaker]} :bound :as state}]

@@ -3,6 +3,72 @@
   (:require [clojure.string :as str]
             [starfreighter.rand :as rand :refer [rand-nth]]))
 
+;;; text cleanup/normalization helpers
+
+(defn tag? [span]
+  (and (vector? span) (keyword? (first span))))
+
+(defn flatten-but-preserve-tags [text]
+  (if (sequential? text)
+    (reduce (fn [text span]
+              (cond (tag? span) (conj text span)
+                    (sequential? span) (into text (flatten-but-preserve-tags span))
+                    :else (conj text span)))
+            [] text)
+    [(str text)]))
+
+(defn append-span [text span]
+  (case [(tag? span) (empty? text)]
+    [true true]   [span " "]
+    [true false]  (into (pop text) [(str (peek text) " ") span " "])
+    [false true]  (let [span (str span)] (if (empty? span) [] [(str span)]))
+    [false false] (conj (pop text) (str (peek text) span))))
+
+(defn consolidate-strings [text]
+  (reduce append-span [] text))
+
+(defn normalize-span [span]
+  (if (string? span)
+    (-> span
+        ;; "fancy" ellipses
+        (str/replace "..." "…")
+        ;; fix whitespace around end-of-word punctuation
+        (str/replace #"\s*([\.\?!,;:…])\s*"
+          (fn [[_ punct]] (str punct " ")))
+        ;; still allow interrobangs to exist tho
+        (str/replace "? !" "?!")
+        ;; consolidate runs of whitespace into a single space
+        (str/replace #"\s+" " ")
+        ;; ensure proper capitalization at the start of new sentences
+        (str/replace #"([\.\?!]) ([a-z])"
+          (fn [[_ punct lower]] (str punct " " (str/capitalize lower)))))
+    span))
+
+(defn normalize-first [span]
+  (if (string? span)
+    (-> (str/triml span)
+        ;; ensure proper capitalization at the start of the first sentence
+        (str/replace #"^([a-z])"
+          (fn [[_ lower]] (str/capitalize lower))))
+    span))
+
+(defn normalize-last [span]
+  ;; the last span in a text should always be a string (for closing punctuation)
+  (assert (string? span))
+  (str/trimr span))
+
+(defn normalize* [text]
+  (assert (pos? (count text)))
+  (if (= (count text) 1)
+    [(-> text first normalize-first normalize-last normalize-span)]
+    (let [fst (first text)
+          fst (cond-> fst (string? fst) normalize-first)
+          lst (normalize-last (last text))]
+      (mapv normalize-span (concat [fst] (butlast (rest text)) [lst])))))
+
+(def normalize
+  (comp normalize* consolidate-strings flatten-but-preserve-tags))
+
 ;;; helpers
 
 (defn comma-list [items]
@@ -12,6 +78,12 @@
       (= (count items) 1) (first items)
       (= (count items) 2) [(first items) " and " (second items)]
       :else (into (vec (interpose ", " (butlast items))) [", and " (last items)]))))
+
+(defn o [opt]
+  (when (rand/chance 0.5) opt))
+
+(defn r [& opts]
+  (rand/rand-nth opts))
 
 (defn culture-link [thing]
   [:link [:cultures (:culture thing)]])
