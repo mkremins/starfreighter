@@ -1,8 +1,9 @@
 (ns starfreighter.cards.loans
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
+            [starfreighter.desc :refer [o r]]
             [starfreighter.gen :as gen]
-            [starfreighter.rand :as rand :refer [rand-nth]]
+            [starfreighter.rand :as rand]
             [starfreighter.util :as util]))
 
 ;; TODO
@@ -23,12 +24,11 @@
         (let [amount 40000] ; TODO procedurally vary this
           {:type :yes-no
            :speaker lender
-           :text [(rand-nth ["Greetings, Captain!" "Hello, Captain." "So," "So, Captain,"])
-                  " I hear tell you’re "
-                  (rand-nth ["running a bit short on" "strapped for"])
-                  " cash. I could certainly lend you, say, " [:cash amount] "… "
-                  "provided you agree to pay it back promptly, plus a bit of interest. "
-                  (rand-nth ["Do we have a deal?" "What do you say?"])]
+           :text [(r "Greetings, Captain!" "Hello, Captain." "So," "So, Captain,")
+                  " I hear tell you’re " (r "running a bit short on" "strapped for")
+                  " cash. I could certainly lend you, say," [:cash amount] "… "
+                  "provided you agree to pay it back promptly, plus a bit of interest."
+                  (r "Do we have a deal?" "What do you say?")]
            :yes [[:call
                   #(assoc % :loan-info
                      {:amount amount
@@ -51,15 +51,13 @@
               pay-up
               {:type :info
                :speaker collector
-               :text ["Pleasure doing business with you, Captain. "
-                      (:shortname lender) " sends their regards!"]
+               :text ["Pleasure doing business with you, Captain." (:shortname lender) " sends their regards!"]
                :ok [[:call #(dissoc % :loan-info)]]}
               surrender
               {:type :game-over
-               :text ["Your ship is repossessed and your remaining assets seized. "
-                      "Your only hope is that they are collectively worth enough "
-                      "to clear the debt and keep you out of indentured servitude "
-                      "to " (:name lender) "."]}
+               :text ["Your ship is repossessed and your remaining assets seized. Your only hope is that they are "
+                      "collectively worth enough to clear the debt and keep you out of indentured servitude to "
+                      (:name lender) "."]}
               fight-outcome
               (let [fight-score (reduce + (map #(if (db/fighter? %) 2 1) (db/crew state)))
                     enemy-fight-score (rand/rand-int* 2 5)]
@@ -74,7 +72,7 @@
                   (= fight-score enemy-fight-score)
                     {:type :info
                      :speaker collector
-                     :text ["Well then… looks like this is my cue to exit. When next we meet, "
+                     :text ["Well then… looks like this is my cue to exit. When next we meet,"
                             "please do try to be a bit more civil – otherwise I might have to do "
                             "something we’ll both regret."]
                      :ok [[:call #(assoc-in % [:loan-info :collection-failed?] true)]]}
@@ -86,7 +84,7 @@
                             "the slight frown of disapproval on " (:name collector) "’s face."]}))
               fight
               {:type :info
-               :text ["You’re not sure who shoots first. Your crew are quick on the draw, "
+               :text ["You’re not sure who shoots first. Your crew are quick on the draw,"
                       "but so are " (:shortname collector) "’s goons. Dust flies in your face "
                       "as you duck for cover, the air around you full of searing light."]
                :icon "💥"
@@ -95,7 +93,7 @@
               cant-afford
               {:type :yes-no
                :speaker collector
-               :text ["Ah, you can’t afford it? That is indeed a problem. "
+               :text ["Ah, you can’t afford it? That is indeed a problem."
                       "In that case, I’m afraid I’ll have to ask you to surrender your vessel "
                       "and submit to arrest. We must recoup our losses somehow…"]
                :yes [[:spend 100]
@@ -103,16 +101,11 @@
                :no [[:set-next-card fight]]}]
           {:type :yes-no
            :speaker collector
-           :text ["Hello, Captain. Remember that " [:cash amount]
-                  " you borrowed from " [:link lender]
-                  (rand-nth ["" [" back on " [:link [:places (:home lender)]]]])
-                  "? Well, "
-                  (rand-nth ["I’m here to collect it"
-                             "I’ve been sent to collect it"
-                             "it’s time to pay up"])
-                  "! Plus interest, that comes out to " [:cash total] " "
-                  (rand-nth ["in all" "total"]) ". "
-                  (rand-nth ["C" "Now, c"]) "an we" (rand-nth [" all" ""])
+           :text ["Hello, Captain. Remember that" [:cash amount] "you borrowed from" [:link lender]
+                  (o ["back on" [:link [:places (:home lender)]]]) "? Well, "
+                  (r "I’m here to collect it" "I’ve been sent to collect it" "it’s time to pay up") "!"
+                  (r "Counting" "Including" "Plus" "With") " interest," (r "the amount owed" "the debt")
+                  "comes out to" [:cash total] (r "in all" "total" "") "." (o "Now,") "can we" (o " all")
                   " agree to do this the easy way?"]
            :yes (if (db/can-afford? state (+ amount interest))
                   [[:spend total]

@@ -6,7 +6,7 @@
 ;;; text cleanup/normalization helpers
 
 (defn tag? [span]
-  (and (vector? span) (keyword? (first span))))
+  (and (sequential? span) (keyword? (first span))))
 
 (defn flatten-but-preserve-tags [text]
   (if (sequential? text)

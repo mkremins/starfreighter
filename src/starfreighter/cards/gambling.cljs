@@ -1,7 +1,8 @@
 (ns starfreighter.cards.gambling
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
-            [starfreighter.rand :as rand :refer [rand-nth]]
+            [starfreighter.desc :refer [o r]]
+            [starfreighter.rand :as rand]
             [starfreighter.util :refer-macros [defcurried]]))
 
 (def ^:private base-bet-amount 5000)
@@ -90,12 +91,11 @@
         {:type :yes-no
          :speaker speaker
          :text ["Hey, Cap’n – as long as we’re in port, I’m gonna go try my "
-                (rand-nth ["hand" "luck"]) " at some gambling. Wanna come along?"]
+                (r "hand" "luck") " at some gambling. Wanna come along?"]
          :yes [[:set-next-card
                 (gen-keep-playing-card state
-                  [(rand-nth ["Are you feeling lucky" "Feeling lucky"])
-                   (rand-nth ["" ", Captain"]) "? It’s only " [:cash base-bet-amount]
-                   " to play, so step right on up to the table and place your bets."])]
+                  [(o "Are you") " feeling lucky " (o ", Captain") "? It’s only" [:cash base-bet-amount]
+                   "to play, so step right on up to the table and place your bets."])]
                [:set-deck gambling-deck]
                [:call #(assoc % :gambling-info {:init-cash (:cash %) :speaker speaker})]]
          :no []})}

@@ -1,8 +1,8 @@
 (ns starfreighter.cards.port
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
+            [starfreighter.desc :refer [o r]]
             [starfreighter.gen :as gen]
-            [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
 
 (def ^:private base-bonus-amount 5000)
@@ -24,23 +24,20 @@
               pay [:cash (+ pay-before (:pay-after cargo))]]
           {:type :yes-no
            :speaker (:merchant cargo)
-           :text [(rand-nth ["I’d like to enlist your services"
-                             "I’ve got a job for you"
-                             "I have a job for you"])
-                  ", Captain. Can you deliver this shipment of " stuff " to "
-                  [:link [:places dest]] "? "
+           :text [(r "I’d like to enlist your services" "I’ve got a job for you" "I have a job for you")
+                  ", Captain. Can you deliver this shipment of " stuff " to" [:link [:places dest]] "?"
                   (if (pos? pay-before)
-                    [(rand-nth [["I’ll pay you " pay " – half now"]
-                                ["Payment will be " pay " – half up front"]
-                                ["You’ll be paid " pay " – half the pay now"]])
-                     [", and " (rand-nth ["half" "the rest"])]]
+                    [(r ["I’ll pay you " pay " – half now"]
+                        ["Payment will be " pay " – half up front"]
+                        ["You’ll be paid " pay " – half the pay now"])
+                     ", and " (r "half" "the rest")]
                     ["Pay will be " pay ", to be paid in full"])
                   " "
-                  (rand-nth [["upon successful delivery of the " stuff]
-                             ["upon your arrival at " dest]
-                             ["when you arrive at " dest " with the " stuff]
-                             ["when you drop the " stuff " off at " dest]
-                             ["when you make it to " dest]])
+                  (r ["upon successful delivery of the " stuff]
+                     ["upon your arrival at " dest]
+                     ["when you arrive at " dest " with the " stuff]
+                     ["when you drop the " stuff " off at " dest]
+                     ["when you make it to " dest])
                   "."]
            :yes [[:add-cargo cargo]
                  [:earn pay-before]]
@@ -55,14 +52,11 @@
         (let [fare (:pay-before char)]
           {:type :yes-no
            :speaker char
-           :text ["I’m in need of safe passage to "
-                  [:link [:places (:destination char)]]
+           :text ["I’m in need of safe passage to " [:link [:places (:destination char)]]
                   ". Can you take me there? I don’t have much, but "
-                  (rand-nth ["I can offer you" "I’ve saved up"]) " " [:cash fare]
-                  (rand-nth [" – hopefully that’ll be enough."
-                             " – I do hope that’s enough."
-                             " – that should be enough, right?"
-                             " – that’s about standard, right?"])]
+                  (r "I can offer you" "I’ve saved up") [:cash fare] "– "
+                  (r "hopefully that’ll be enough." "I do hope that’s enough."
+                     "that should be enough, right?" "that’s about standard, right?")]
            :yes [[:add-cargo char]
                  [:earn fare]]
            :no []}))}
@@ -78,23 +72,20 @@
               amount (* (if import? +30 +20) 1000)] ; TODO procedurally vary this
           {:type :yes-no
            :speaker buyer
-           :text [(rand-nth ["Greetings" "Hello"])
-                  ", Captain. I’m " (rand-nth ["in the market" "looking"])
+           :text [(r "Greetings" "Hello") ", Captain. I’m " (r "in the market" "looking")
                   " to buy some " stuff ", and it looks like you’ve got some for sale. "
-                  (rand-nth [["How does " [:cash amount] " sound to you?"]
-                             ["I can offer you " [:cash amount] " – sound like a deal?"]])]
+                  (r ["How does" [:cash amount] "sound to you?"]
+                     ["I can offer you" [:cash amount] "– sound like a deal?"])]
            :yes [[:earn amount]
                  [:drop-cargo item]
                  (if (:counterfeit? item)
                    [:set-next-card
                     {:type :info
                      :speaker buyer
-                     :text [(rand-nth ["Hey…" "Hey, hold on a second…" "Hey, wait a minute…"])
-                            " "
-                            (rand-nth ["are you trying to pull one over on me"
-                                       "just who do you think you’re fooling"
-                                       "what’re you trying to pull"
-                                       "who do you think you’re fooling"])
+                     :text [(r "Hey…" "Hey, hold on a second…" "Hey, wait a minute…")
+                            (r "are you trying to pull one over on me"
+                               [(o "just ") "who do you think you’re fooling"]
+                               "what’re you trying to pull")
                             "? This " stuff " is counterfeit! I demand a refund!"]
                      :ok [[:spend amount]
                           [:add-memory buyer :tried-sell-counterfeit-goods]]}]
@@ -114,18 +105,17 @@
           {:type :yes-no
            :speaker seller
            :text ["Looking for " stuff "? "
-                  (rand-nth [[(rand-nth ["Boy howdy, have" "Have"]) " I got a "
-                              (rand-nth ["" "great "]) "deal for you"]
-                             "How fortunate you are"
-                             "It’s your lucky day"
-                             "Well, you’re in luck"
-                             "Well, you’ve come to the right place"
-                             ["What incredible " (rand-nth ["fortune" "luck"])]])
-                   "! I’m currently selling " stuff " for " (rand-nth ["just" "only"]) " "
-                   [:cash price] " " (rand-nth ["a pop" "per unit"])
-                   (rand-nth [[" – the lowest price you’ll get this side of " (db/rand-destination state)]
-                              [". With prices like these, I’m practically giving this " stuff " away"]])
-                   (rand-nth ["." "!"])]
+                  (r [(o "Boy howdy, ") "have I got a " (o "great ") "deal for you"]
+                     "How fortunate you are"
+                     "It’s your lucky day"
+                     "Well, you’re in luck"
+                     "Well, you’ve come to the right place"
+                     ["What incredible " (r "fortune" "luck")])
+                   "! I’m currently selling " stuff " for " (r "just" "only")
+                   [:cash price] (r "a pop" "per unit")
+                   (r [" – the lowest price you’ll get this side of " (db/rand-destination state)]
+                      [". With prices like these, I’m practically giving this " stuff " away"])
+                   (r "." "!")]
            :yes [[:add-cargo item]
                  [:spend price]
                  [:add-memory seller :bought-goods]]
@@ -140,45 +130,25 @@
           {:type :yes-no
            :speaker char
            ;; TODO work a mention of pay into this somewhere
-           :text [(rand-nth ["Excuse me, Captain. "
-                             "I’m looking for work, Captain. "
-                             "You’re a spacer, right? "
-                             ""])
-                  (rand-nth ["Any chance you’d have"
-                             "Do you have"
-                             "Do you think there might be"
-                             "Have you got"
-                             "Is there by any chance"
-                             "Might there be"
-                             "Might you have"])
-                  " "
-                  (rand-nth ["a place" "a use" "room"])
-                  " for "
-                  (rand-nth ["" "someone like "])
-                  "me in your crew? "
+           :text [(r "Excuse me, Captain." "I’m looking for work, Captain." "You’re a spacer, right?" "")
+                  (r "Any chance you’d have" "Do you have" "Do you think there might be"
+                     "Have you got" "Is there by any chance" "Might there be" "Might you have") " "
+                  (r "a place" "a use" "room") " for " (o "someone like ") "me in your crew?"
                   (cond
                     (db/fighter? char)
-                      ["I’m not much of a deep thinker, but I can hold my own in a "
-                       (rand-nth ["fight" "scrap"]) "."]
+                      ["I’m not much of a deep thinker, but I can hold my own in a " (r "fight" "scrap") "."]
                     (db/mechanic? char)
-                      ["If there’s one thing " (rand-nth ["I know" "I’m good at"])
+                      ["If there’s one thing " (r "I know" "I’m good at")
                        ", it’s fixing spaceships. I grew up around them, so I’ve been "
-                       (rand-nth ["at it" "doing it" "learning" "practicing"]) " my whole life."]
+                       (r "at it" "doing it" "learning" "practicing") " my whole life."]
                     (db/medic? char)
-                      ["I don’t have any formal medical training, but "
-                       (rand-nth ["I know" "I’ve picked up"]) " enough to patch people up "
-                       "and keep them going after a close scrape."]
+                      ["I don’t have any formal medical training, but " (r "I know" "I’ve picked up")
+                       " enough to patch people up and keep them going after a close scrape."]
                     :else
-                      (rand-nth [""
-                                 [(rand-nth ["I don’t have any"
-                                             "I don’t have much in the way of"
-                                             "I haven’t got any"
-                                             "I’ve got no"
-                                             "I’ve not got much in the way of"])
-                                  " special skills"
-                                  (rand-nth [" or anything" " or anything like that" ""])
-                                  ", but I’m a hard worker and I’m " (rand-nth ["eager" "willing"])
-                                  " to learn."]]))]
+                      (o [(r "I don’t have any" "I don’t have much in the way of"
+                             "I haven’t got any" "I’ve got no" "I’ve not got much in the way of")
+                          " special skills " (r "or anything" "or anything like that" "")
+                          ", but I’m a hard worker and I’m " (r "eager" "willing") " to learn."]))]
            :yes [[:add-crew char]
                  [:spend hire-price]]
            :no []}))}
@@ -193,7 +163,7 @@
         {:type :yes-no
          :speaker merchant
          :text ["Looks like your ship’s in need of some repair – it’s practically falling apart! "
-                "Want me to help you out with that? It’ll only run you about " [:cash repair-price] "."]
+                "Want me to help you out with that? It’ll only run you about" [:cash repair-price] "."]
          :yes [[:spend repair-price]
                [:repair-ship 20]]
          :no []})}
@@ -206,8 +176,8 @@
         {:type :yes-no
          :speaker merchant
          :text ["Your vessel looks a bit cramped, Captain. If you’d like, I could modify it "
-                "to give you a little more breathing room… for a fair price, of course. "
-                "How does " [:cash upgrade-price] " sound" (rand-nth ["" " to you"]) "?"]
+                "to give you a little more breathing room… for a fair price, of course."
+                "How does" [:cash upgrade-price] "sound" (o " to you") "?"]
          :yes [[:call #(update % :max-crew inc)]
                [:spend upgrade-price]]
          :no []})}
@@ -219,9 +189,9 @@
  :gen (fn [{{:keys [merchant]} :bound :as state}]
         {:type :yes-no
          :speaker merchant
-         :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once. "
-                "How about I do you a favor and modify this bucket of bolts? For a price, of course. "
-                "Does " [:cash upgrade-price] " sound good" (rand-nth ["" " to you"]) "?"]
+         :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once."
+                "How about I do you a favor and modify this bucket of bolts? For a price, of course."
+                "Does " [:cash upgrade-price] " sound good" (o " to you") "?"]
          :yes [[:call #(update % :max-cargo inc)]
                [:spend upgrade-price]]
          :no []})}
@@ -239,16 +209,14 @@
               just-one? (= crew-size 1)]
           {:type :yes-no
            :speaker speaker
-           :text ["Say, Cap’n… "
-                  (rand-nth (if just-one? ["I’ve" "we’ve" "we’ve both"] ["we’ve" "we’ve all"]))
+           :text ["Say, Cap’n…"
+                  (if just-one? (r "I’ve" "we’ve" "we’ve both") (r "we’ve" "we’ve all"))
                   " been working pretty hard lately, and "
-                  (if just-one?
-                    "I was"
-                    [(rand-nth ["the rest of the crew and I" "we"]) " were"])
-                  " wondering if " (rand-nth ["maybe " ""]) (if just-one? "I" "we")
+                  (if just-one? "I was" [(r "the rest of the crew and I" "we") " were"])
+                  " wondering if " (o "maybe ") (if just-one? "I" "we")
                   " might be due a small bonus for everything " (if just-one? "I" "we")
-                  " do" (rand-nth ["" " around here"]) ". " [:cash base-bonus-amount]
-                  (when-not just-one? " each") " seems pretty fair…"]
+                  " do" (o " around here") "." [:cash base-bonus-amount]
+                  (when-not just-one? "each ") "seems pretty fair…"]
            :yes [[:spend amount]
                  [:add-whole-crew-memory :gave-bonus]]
            :no [[:add-whole-crew-memory :declined-bonus-request]]}))}
@@ -275,19 +243,16 @@
            ;; further down the line.
            :interruptible? true
            :speaker speaker
-           :text [(rand-nth [["Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
-                              "to be had round here are pretty slim."]
-                             "Say, Cap’n… we’ve been in port a while, haven’t we?"
-                             "Sitting here in port is getting mighty boring, Cap’n."
-                             "We’re all getting pretty restless, Cap’n."
-                             "We’ve been in port a good while now."])
-                  " "
-                  (rand-nth ["Don’tcha think it’s about time" "How about" "What do you say"])
-                  " we "
-                  (rand-nth ["get a move on" "get going" "hit the road" "push off"
-                             "raise anchor" "set out" "set sail" "shove off"])
-                  " for " [:link [:places proposed-dest]]
-                  (rand-nth ["" " already"]) "?"]
+           :text [(r ["Dunno ‘bout you, Cap’n, but it looks to me like the pickings "
+                      "to be had round here are pretty slim."]
+                     "I’m getting pretty restless, Cap’n."
+                     "Say, Cap’n… we’ve been in port a while, haven’t we?"
+                     "Sitting here in port is getting mighty boring, Cap’n."
+                     "We’ve been in port a good while now.")
+                  (r "Don’tcha think it’s about time" "How about" "What do you say") " we "
+                  (r "get a move on" "get going" "hit the road" "push off"
+                     "raise anchor" "set out" "set sail" "shove off")
+                  " for " [:link [:places proposed-dest]] (o "already") "?"]
            :yes [[:begin-departure-for proposed-dest]]
            :no [[:add-memory speaker :declined-depart-request]]}))}
 
@@ -308,8 +273,8 @@
               (if (db/can-afford? state bonus)
                 {:type :yes-no
                  :speaker quitter
-                 :text ["Hmm. Well, if you gave me a really substantial bonus – say, " [:cash bonus]
-                        " – I suppose there’s a chance you might be able to convince me to stay on…"]
+                 :text ["Hmm. Well, if you gave me a really substantial bonus – say," [:cash bonus]
+                        "– I suppose there’s a chance you might be able to convince me to stay on…"]
                  :yes [[:add-memory quitter :gave-bonus]
                        [:spend bonus]]
                  :no [[:set-next-card
@@ -320,7 +285,7 @@
                    "that would be enough to convince me to stay."]))]
           {:type :yes-no
            :speaker quitter
-           :text ["Sorry, Cap’n, but I think " (rand-nth ["this" (:name (db/current-place state))])
+           :text ["Sorry, Cap’n, but I think " (r "this" (:name (db/current-place state)))
                   " might just be the end of the line for me. I’d like to request "
                   "your permission to resign."]
            :yes on-resign
@@ -336,8 +301,8 @@
         {:type :info
          :speaker speaker
          :text ["Y’know, Cap’n, I never thought I’d say this, but it’s actually "
-                "kind of nice to " (rand-nth ["see" "visit"]) " "
-                (rand-nth ["home" "my home planet" "my old home planet"])
+                "kind of nice to " (r "see" "visit") " "
+                (r "home" "my home system" "my old home system")
                 " again. Especially since this time, I know I can leave whenever I want!"]
          :ok [[:add-memory speaker :visited-home]]})}
 
