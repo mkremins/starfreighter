@@ -15,8 +15,32 @@
  :gen (fn [state]
         {:type :info
          :text ["You " (r "overtake" "pass by") " a slow-moving, gaudily painted vessel, configured as "
-                "a passenger liner: a cruise ship ferrying wealthy tourists lazily between the stars."]
+                "a passenger liner: a cruise ship ferrying wealthy tourists " (o "lazily ") "between the stars."]
          :ok []})}
+
+{:id :flavor-diplo-ship
+ :prereq (comp (db/find-module :diplomacy) db/current-dest)
+ :weight (constantly 4)
+ :gen (fn [state]
+        (let [base-escorts (r "fighters" "interceptors")
+              escorts [(o (r "heavy" "heavily armed" "light" "lightly armed")) " " base-escorts]
+              group   ["a" (r "company" "flight" "handful" "squadron" "pair" "wing") " of " escorts]]
+          {:type :info
+           :text ["You" (r "’re overtaken by" " overtake" " pass by") " " (r "a" "some sort of") " light "
+                  (o "passenger ") (r "courier" "shuttle" "transport") ", "
+                  (r ["accompanied by " (r ["an escort of " escorts] group)] ["escorted by " group]
+                     ["protected by " (r ["an escort of " escorts] group)] ["with " group " as an escort"])
+                  "."
+                  (r [(a [(o "important ") (r "ambassador" "diplomat" "politician")])
+                      ", en route to " (:name (db/current-dest state)) "?"]
+                     ["One of the " base-escorts " "
+                      (r ["edges " (o "just ") "a bit closer" (o " to you")]
+                         ["keeps its " (r "cannons" "guns" "weapons") " trained " (r "in your direction" "on you")]
+                         [(r "pivots" "swivels" "tilts" "trains") " its " (r "cannons" "guns" "weapons") " "
+                          (r "briefly" "menacingly") " " (r "in your direction" "towards you")])
+                      " as you pass" (o [", as if warning you to " (r "keep your distance" "stay away")]) "."]
+                     "")]
+           :ok []}))}
 
 {:id :flavor-space-battle
  :prereq (comp (db/find-module :warzone) db/current-dest)

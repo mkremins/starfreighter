@@ -72,7 +72,9 @@
 ;;; helpers
 
 (defn a [word]
-  (str (if (#{\a \e \i \o \u} (first (str/lower-case word))) "an" "a") " " word))
+  (let [word (cond-> word (sequential? word) str/join)]
+    (assert (string? word))
+    (str (if (#{\a \e \i \o \u} (first (str/lower-case word))) "an" "a") " " word)))
 
 (defn adj-list [adjs]
   (let [adjs (remove empty? adjs)]
