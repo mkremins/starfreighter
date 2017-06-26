@@ -6,9 +6,9 @@
             [starfreighter.util :as util]))
 
 (def ^:private base-bonus-amount 5000)
-(def ^:private hire-price 30000)
-(def ^:private repair-price 30000)
-(def ^:private upgrade-price 50000)
+(def ^:private hire-price 10000)
+(def ^:private repair-price 20000)
+(def ^:private upgrade-price 30000)
 
 (def cards [
 
@@ -169,9 +169,11 @@
          :no []})}
 
 {:id :offer-upgrade-crew-quarters
- :prereq (every-pred #(< (:max-crew %) 6) (db/can-afford? upgrade-price))
+ :prereq (every-pred #(< (:max-crew %) 6)
+                     (db/can-afford? upgrade-price)
+                     (comp (db/find-module :shipyard) db/current-place))
  :bind   {:merchant db/some-trusting-merchant}
- :weight #(if (db/can-hold-more-crew? %) 1 2)
+ :weight #(if (db/can-hold-more-crew? %) 4 8)
  :gen (fn [{{:keys [merchant]} :bound :as state}]
         {:type :yes-no
          :speaker merchant
@@ -183,13 +185,15 @@
          :no []})}
 
 {:id :offer-upgrade-cargo-hold
- :prereq (every-pred #(< (:max-cargo %) 12) (db/can-afford? upgrade-price))
+ :prereq (every-pred #(< (:max-cargo %) 12)
+                     (db/can-afford? upgrade-price)
+                     (comp (db/find-module :shipyard) db/current-place))
  :bind   {:merchant db/some-trusting-merchant}
- :weight #(if (db/can-hold-more-cargo? %) 1 2)
+ :weight #(if (db/can-hold-more-cargo? %) 6 12)
  :gen (fn [{{:keys [merchant]} :bound :as state}]
         {:type :yes-no
          :speaker merchant
-         :text ["You’re a spacer, yes? Surely it’d help your trade if you could carry more cargo at once."
+         :text ["Surely it’d help your trade if you could carry more cargo at once."
                 "How about I do you a favor and modify this bucket of bolts? For a price, of course."
                 "Does " [:cash upgrade-price] " sound good" (o " to you") "?"]
          :yes [[:call #(update % :max-cargo inc)]
@@ -202,7 +206,7 @@
  :bind   [[:speaker (db/some* db/crew)]
           [:amount  (comp (partial * base-bonus-amount) count :crew)]
           [:_       #(db/enforce % (db/can-afford? (db/var* % :amount)))]]
- :weight #(+ (util/bucket (:cash %) [[60000 1] [80000 2] [100000 3]])
+ :weight #(+ (util/bucket (:cash %) [[20000 1] [30000 2] [40000 3]])
              (util/bucket (db/avg-crew-mood %) [[40 3] [60 2] [80 1] [100 0]]))
  :gen (fn [{{:keys [amount speaker]} :bound :as state}]
         (let [crew-size (count (:crew state))
