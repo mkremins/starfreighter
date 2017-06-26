@@ -1,11 +1,48 @@
 (ns starfreighter.cards.space
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [starfreighter.db :as db]
-            [starfreighter.desc :refer [o r]]
+            [starfreighter.desc :as desc :refer [a o r]]
             [starfreighter.rand :as rand :refer [rand-nth]]
             [starfreighter.util :as util]))
 
 (def cards [
+
+;;; flavor
+
+{:id :flavor-cruise-ship
+ :prereq (comp (db/find-module :tourism) db/current-dest)
+ :weight (constantly 4)
+ :gen (fn [state]
+        {:type :info
+         :text ["You " (r "overtake" "pass by") " a slow-moving, gaudily painted vessel, configured as "
+                "a passenger liner: a cruise ship ferrying wealthy tourists lazily between the stars."]
+         :ok []})}
+
+{:id :flavor-space-battle
+ :prereq (comp (db/find-module :warzone) db/current-dest)
+ :weight (constantly 4)
+ :gen (fn [state]
+        {:type :info
+         :text ["In the distance, you " (o "think you ") "can " (o "just barely ") (r "glimpse" "make out" "see")
+                " the " (r "telltale" "unmistakable") " bright flashes of "
+                (r "beam cannon" "disruptor" "plasma" "wavebeam artillery") " fire: "
+                (o [(r "a pair" "clusters" "two groups") " of"]) " " (r "enemy" "hostile" "rival" "") " "
+                (r "attack ships" "battlecruisers" "gunboats" "warships") " " (r "exchanging" "trading") " blows."]
+         :ok []})}
+
+{:id :flavor-old-wreck
+ :prereq (comp (some-fn (db/find-module :warzone) (db/find-module :piracy)) db/current-dest)
+ :weight (constantly 4)
+ :gen (fn [state]
+        {:type :info
+         :text ["You drift past the "
+                (desc/adj-list [(o "distant") (o (r "broken" "burned-out" "deteriorating" "skeletal" "twisted"))]) " "
+                (r "carcass" "hulk" "remains" "wreck") " of "
+                (a (r "abandoned" "defeated" "fallen" "scuttled")) " " (r "ship" "vessel") "."
+                "A " (r "gunboat" ["patrol " (r "boat" "ship")] "picket ship") "? A "
+                (o (r "cargo" "civilian" "heavy" "light" "merchant")) " freighter?"
+                "The damage is too " (r "complete" "heavy" "thorough") " to say for sure."]
+         :ok []})}
 
 ;;; damage & repairs
 

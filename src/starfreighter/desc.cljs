@@ -71,6 +71,13 @@
 
 ;;; helpers
 
+(defn a [word]
+  (str (if (#{\a \e \i \o \u} (first (str/lower-case word))) "an" "a") " " word))
+
+(defn adj-list [adjs]
+  (let [adjs (remove empty? adjs)]
+    (if (empty? adjs) "" (vec (interpose ", " adjs)))))
+
 (defn comma-list [items]
   (let [items (remove empty? items)]
     (cond

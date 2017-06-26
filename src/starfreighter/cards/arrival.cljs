@@ -8,7 +8,7 @@
 
 (def cards [
 
-{:id :arrive-quarantine
+{:id :arrive-flavor-quarantine
  :prereq (every-pred has-business-here?
                      (comp (db/find-module :quarantine) db/current-place))
  :weight (constantly 100000)
@@ -31,6 +31,20 @@
                 (r ["an eerie " (r "calm" "hush" "quiet" "silence" "stillness")
                     " hangs " (o "like a shadow") " over the port"]
                    "there’s not a single ship in sight") "."]
+         :ok [[:arrive]]})}
+
+{:id :arrive-flavor-warzone
+ :prereq (every-pred has-business-here?
+                     (comp (db/find-module :warzone) db/current-place))
+ :weight (constantly 100000)
+ :gen (fn [state]
+        {:type :info
+         :text ["As you make your way to the spaceport, there’s no sign of "
+                (r "active" "ongoing") " " (r "combat" "fighting" "hostilities") ". But the "
+                (r "near-total emptiness of the space around the port speaks for itself"
+                   [(o "occasional ") "swirling clouds of " (r "debris" "wreckage") " speak for themselves"]
+                   [(r "damaged-looking" "visibly damaged") " orbital defense emplacements speak for themselves"])
+                (o [": by no means is this " (o "system ") "a " (r "uniformly" "wholly") " safe place to be"]) "."]
          :ok [[:arrive]]})}
 
 {:id :arrive-normally
