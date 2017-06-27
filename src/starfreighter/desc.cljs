@@ -1,7 +1,7 @@
 (ns starfreighter.desc
   (:refer-clojure :exclude [rand rand-int rand-nth shuffle])
   (:require [clojure.string :as str]
-            [starfreighter.rand :as rand :refer [rand-nth]]))
+            [starfreighter.rand :as rand]))
 
 ;;; text cleanup/normalization helpers
 
@@ -111,8 +111,7 @@
 (defmulti describe-module :template)
 
 (defmethod describe-module :agriculture [_]
-  [(rand-nth ["Agriculture" "Farming"]) " is a"
-   (rand-nth ["n important" " key" " major"]) " industry here."])
+  [(r "Agriculture" "Farming") " is " (a (r "important" "key" "major")) " industry here."])
 
 (defmethod describe-module :aristocracy [_]
   "An aristocratic class of hereditary nobility holds a substantial amount of political power here.")
@@ -126,68 +125,54 @@
 
 (defmethod describe-module :gambling [_]
   ["Gambling is legal here"
-   (when (rand/chance 0.5)
-     [", " (rand-nth ["albeit" "and" "but"]) " "
-      (rand-nth ["largely unregulated" "strictly regulated" "tightly regulated"])
-      (rand-nth ["" " by the government"])])
+   (o [", " (r "albeit" "and" "but") " "
+       (r "largely unregulated" "strictly regulated" "tightly regulated")
+       (o " by the government")])
    "."])
 
 (defmethod describe-module :hospital [_]
-  ["This system is known for its especially well-equipped "
-   (rand-nth ["healthcare" "hospital" "medical"]) " facilities."])
+  ["This system is known for its especially well-equipped " (r "healthcare" "hospital" "medical") " facilities."])
 
 (defmethod describe-module :independence [_]
-  (let [movement [(rand-nth ["" "growing " "powerful "]) "system-wide independence movement"]]
-    (rand-nth
-      [["A " movement " enjoys a good deal of support from the populace here."]
-       ["Many residents of this system " (rand-nth ["are" "have become"]) " "
-        (rand-nth ["involved with" "sympathetic to"]) " a " movement "."]])))
+  (let [movement [(r "" "growing " "powerful ") "system-wide independence movement"]]
+    (r ["A " movement " enjoys a good deal of support from the populace here."]
+       ["Many residents of this system " (r "are" "have become") " "
+        (r "involved with" "sympathetic to") " a " movement "."])))
 
 (defmethod describe-module :megacorp [_]
   ["Much of this system is controlled by a single megacorporation, "
    "which employs at least half of the system’s residents in some capacity or another."])
 
 (defmethod describe-module :mining [_]
-  [(rand-nth ["Asteroid m" "M"]) "ining is a"
-   (rand-nth ["n important" " key" " major"]) " industry here."])
+  [(o "Asteroid ") " mining is " (a (r "important" "key" "major")) " industry here."])
 
 (defmethod describe-module :neutral [_]
-  [(rand-nth ["By treaty, this" "Legally, this" "This"]) " system is "
-   (rand-nth ["" "intended to be"]) " " (rand-nth ["" "governed as"])
-   " a neutral zone, " (rand-nth ["" "officially "]) "unaffiliated with "
-   "any of the established multi-system powers."])
+  [(o [(r "By treaty" "Legally") ", "]) "this system is " (o "intended to be") " " (o "governed as")
+   " a neutral zone, " (o "officially ") "unaffiliated with any of the established multi-system powers."])
 
 (defmethod describe-module :piracy [_]
-  (rand-nth
-    [["This system is known as a haven for "
+  (r ["This system is known as a haven for "
       (comma-list
         ["pirates"
-         (when (rand/chance 0.5) "smugglers")
-         (when (rand/chance 0.5)
-           ["other " (rand-nth ["spacefarers" "spacers" "starfarers" "voidfarers"]) " of ill repute"])])
+         (o "smugglers")
+         (o ["other " (r "spacefarers" "spacers" "starfarers" "voidfarers") " of ill repute"])])
       "."]
-     ["Piracy is "
-      (rand-nth [["a major " (rand-nth ["issue" "problem"])]
-                 "commonplace" "prevalent" "rampant" "widespread"])
-      " here."]]))
+     ["Piracy is " (r ["a major " (r "issue" "problem")] "commonplace" "prevalent" "rampant" "widespread") " here."]))
 
 (defmethod describe-module :prohibition [_]
-  (let [substances [(rand-nth ["" "many kinds of "]) "intoxicating substances"]]
-    (rand-nth
-      [["The government of this system has imposed a prohibition "
+  (let [substances [(o "many kinds of ") "intoxicating substances"]]
+    (r ["The government of this system has imposed a prohibition "
         "on the import, manufacturing, and consumption of " substances "."]
-       ["The import, manufacturing, and consumption of " substances " is prohibited here."]])))
+       ["The import, manufacturing, and consumption of " substances " is prohibited here."])))
 
 (defmethod describe-module :quarantine [_]
   ["This system is currently struggling to "
-   (rand-nth ["contain" "deal with" "fend off"]) " "
-   (rand-nth ["a" "an outbreak of a" "the spread of a"])
-   (rand-nth ["n especially" " particularly"]) " virulent "
-   (rand-nth ["contagion" "illness" "infection" "infectious disease" "plague"]) "."])
+   (r "contain" "deal with" "fend off") " " (r "" "an outbreak of" "the spread of") " "
+   (a (r "especially" "particularly")) " " (r "dangerous" "virulent") " "
+   (r "contagion" "illness" "infection" "infectious disease" "plague") "."])
 
 (defmethod describe-module :reactor [_]
-  ["The synthesis of exotic forms of matter is a"
-   (rand-nth ["n important" " key" " major"]) " industry here."])
+  ["The synthesis of exotic forms of matter is " (a (r "important" "key" "major")) " industry here."])
 
 (defmethod describe-module :religion [_]
   "Residents of this system have a reputation for being highly religious.")
@@ -196,22 +181,21 @@
   "This system is known for its shipyards.")
 
 (defmethod describe-module :tourism [_]
-  (rand-nth
-    [["Tourism is a" (rand-nth ["n important" " key" " major"]) " industry here."]
-     ["This system is a popular " (rand-nth ["destination for tourists" "tourist destination"]) "."]]))
+  (r ["Tourism is " (a (r "important" "key" "major")) " industry here."]
+     ["This system is a popular " (r "destination for tourists" "tourist destination") "."]))
 
 (defmethod describe-module :warzone [_]
   "This system is on the front lines of an ongoing war.")
 
 (defmethod describe-module :weapons [_]
-  [(rand-nth ["Arms manufacturing" "Weapons manufacturing" "The manufacturing of weapons and explosives"])
-   " is a" (rand-nth ["n important" " key" " major"]) " industry here."])
+  [(r "Arms manufacturing" "The manufacturing of weapons and explosives" "Weapons manufacturing")
+   " is " (a (r "important" "key" "major")) " industry here."])
 
 ;;; main entry point
 
-(defmulti describe :type)
+(defmulti describe* :type)
 
-(defmethod describe :cargo
+(defmethod describe* :cargo
   [{:keys [merchant pay-before pay-after seller], dest :destination :as item}]
   [["A shipment of " (subj item)
     (when dest [", bound for " (dest-link item)]) ". "
@@ -226,7 +210,7 @@
       ["We bought this " (:name item) " from " [:link seller] " at " (home-link seller)
        " for " [:cash (:price item)] "."])]])
 
-(defmethod describe :char [char]
+(defmethod describe* :char [char]
   [[(subj char) " is a person from " (home-link char) ". "
     "They belong to the " (culture-link char) " culture. "
     (case (:role char)
@@ -239,22 +223,25 @@
       ;else
         "")]])
 
-(defmethod describe :culture [culture]
+(defmethod describe* :culture [culture]
   [[(subj culture) " is a distinct culture in this region of the galaxy."]])
 
-(defmethod describe :place [place]
+(defmethod describe* :place [place]
   (binding [rand/*rng* (rand/rng (hash (:name place)))] ; ensure we pick the same text variations every time
-    (let [are #(rand-nth ["are " "include "])]
+    (let [are #(r "are " "include ")]
       [[(subj place) " is an inhabited "
-        (rand-nth ["planetary " "solar " "star " ""]) "system. "
-        "The " (rand-nth ["dominant" "majority"]) " culture is "
+        (r "planetary " "solar " "star " "") "system. "
+        "The " (r "dominant" "majority") " culture is "
         (culture-link place) ". "
-        (rand-nth ["Chief e" "E" "Key e" "Major e" "Notable e" "Primary e"])
-        "xports " (are) (comma-list (map name (:exports place))) ". "
-        (rand-nth ["Chief i" "I" "Key i" "Major i" "Notable i" "Primary i"])
-        "mports " (are) (comma-list (map name (:imports place))) "."]
+        (r "Chief" "Key" "Major" "Notable" "Primary" "") " exports " (are)
+        (comma-list (map name (:exports place))) ". "
+        (r "Chief" "Key" "Major" "Notable" "Primary" "") " imports " (are)
+        (comma-list (map name (:imports place))) "."]
        ["Our merchant contacts here " (are)
         (comma-list (map #(-> [:link [:chars %]]) (:merchants place))) "."]
        [(interpose " " (mapv describe-module (:modules place)))]])))
 
-(defmethod describe :default [{:keys [desc]}] desc)
+(defmethod describe* :default [{:keys [desc]}] desc)
+
+(defn describe [thing]
+  (mapv normalize (describe* thing)))
