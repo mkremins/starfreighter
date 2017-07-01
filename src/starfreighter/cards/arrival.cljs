@@ -1,13 +1,10 @@
 (ns starfreighter.cards.arrival
   (:require [starfreighter.db :as db]
-            [starfreighter.desc :refer [a o r]]))
+            [starfreighter.desc :refer [a o port r]]))
 
 (defn has-business-here? [{:keys [travel] :as state}]
   (or (= (:at travel) (:final-dest travel))
       (some (db/headed-here? state) (:cargo state))))
-
-(defn- port []
-  [(r "space" "star" "") "port"])
 
 (def cards [
 

@@ -47,5 +47,14 @@
   [f coll]
   (zipmap (map f coll) coll))
 
+(defn pow-scale
+  "Converts the value `n` from a (presumably linear) scale `[old-min old-max]`
+  to the new scale `[new-min new-max]`, using a power function with exponent
+  `exp` to perform the conversion."
+  [exp n [old-min old-max] [new-min new-max]]
+  (let [old-range (- old-max old-min)
+        new-range (- new-max new-min)]
+    (-> n (- old-min) (/ old-range) (js/Math.pow exp) (* new-range) (+ new-min))))
+
 (defn sift [pred coll]
   [(filter pred coll) (remove pred coll)])

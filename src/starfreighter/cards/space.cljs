@@ -24,7 +24,7 @@
  :gen (fn [state]
         (let [base-escorts (r "fighters" "interceptors")
               escorts [(o (r "heavy" "heavily armed" "light" "lightly armed")) " " base-escorts]
-              group   ["a" (r "company" "flight" "handful" "squadron" "pair" "wing") " of " escorts]]
+              group   ["a " (r "company" "flight" "handful" "squadron" "pair" "wing") " of " escorts]]
           {:type :info
            :text ["You" (r "’re overtaken by" " overtake" " pass by") " " (r "a" "some sort of") " light "
                   (o "passenger ") (r "courier" "shuttle" "transport") ", "

@@ -94,6 +94,9 @@
 (defn r [& opts]
   (rand/rand-nth opts))
 
+(defn port []
+  [(r "space" "star" "") "port"])
+
 (defn culture-link [thing]
   [:link [:cultures (:culture thing)]])
 
