@@ -170,7 +170,7 @@
 {:id :info-crew-unfriendly
  :prereq #(not (contains? (:recent-picks %) :info-crew-friendly))
  :bind   [[:annoyed (db/some* db/crew)]
-          [:annoyer #(db/some-where % (partial not= (-> % :bound :crew-2)) db/crew)]]
+          [:annoyer #(db/some-where % (partial not= (-> % :bound :annoyed)) db/crew)]]
  :weight #(if (<= (db/avg-crew-mood %) 40) 4 2)
  :gen (fn [{{:keys [annoyed annoyer]} :bound}]
         {:type :info
