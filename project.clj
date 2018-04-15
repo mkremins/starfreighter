@@ -9,7 +9,7 @@
   :cljsbuild {:builds [{:id "app"
                         :source-paths ["src"]
                         :compiler {:main starfreighter.app
-                                   :optimizations :none
-                                   :output-dir "target/app"
-                                   :output-to "target/app.js"
-                                   :source-map true}}]})
+                                   :optimizations :advanced
+                                   :output-dir "docs/js/app"
+                                   :output-to "docs/js/app.js"
+                                   :source-map "docs/js/app.js.map"}}]})
